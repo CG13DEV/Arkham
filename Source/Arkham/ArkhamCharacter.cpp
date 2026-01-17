@@ -88,7 +88,19 @@ void AArkhamCharacter::Tick(float DeltaTime)
 	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
 	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
 
-	GetController()->SetControlRotation(MainDirection.Rotation());
+	// Проверяем, достаточно ли велико расстояние для стабильного вычисления ротации
+	const float MinDistanceForRotation = 100.f; // Минимальное расстояние для избежания нестабильности
+	if (MainDirection.SizeSquared() > FMath::Square(MinDistanceForRotation))
+	{
+		// Вместо прямой установки делаем плавную интерполяцию
+		FRotator TargetRotation = MainDirection.Rotation();
+		FRotator CurrentRotation = GetController()->GetControlRotation();
+		
+		// Плавная интерполяция с высокой скоростью для отзывчивости
+		FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, 10.f);
+		GetController()->SetControlRotation(NewRotation);
+	}
+	// Если расстояние слишком мало, не меняем ротацию (избегаем джиттера)
 }
 
 void AArkhamCharacter::PawnClientRestart()
