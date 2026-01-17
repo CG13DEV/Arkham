@@ -56,4 +56,6 @@ protected:
 	void Input_Look(const FInputActionValue& Value);
 	void Input_RunPressed();
 	void Input_RunReleased();
+
+	FVector ChackVisibilityForSpringArm(FVector PawnLocation, FVector Target, float ProbSize, TEnumAsByte<ECollisionChannel> ProbeChannel);
 };

@@ -79,17 +79,24 @@ void AArkhamCharacter::Tick(float DeltaTime)
 
 	FVector DistanceToTarget =  GetActorLocation() - TargetSpringArmFloatingLocation;
 	FVector Direction = DistanceToTarget.GetSafeNormal();
-	if (DistanceToTarget.Size() > TargetSpringArmLength)
+	if (DistanceToTarget.SizeSquared() > FMath::Square(TargetSpringArmLength))
 	{
 		
 		TargetSpringArmFloatingLocation = GetActorLocation() + -Direction * TargetSpringArmLength;
 	}
 
+	TargetSpringArmFloatingLocation = ChackVisibilityForSpringArm(
+		GetActorLocation(),
+		TargetSpringArmFloatingLocation,
+		SpringArmMain->ProbeSize,
+		SpringArmMain->ProbeChannel
+	);
+
 	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
 	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
 
 	// Проверяем, достаточно ли велико расстояние для стабильного вычисления ротации
-	const float MinDistanceForRotation = 100.f; // Минимальное расстояние для избежания нестабильности
+	const float MinDistanceForRotation = 50.f; // Минимальное расстояние для избежания нестабильности
 	if (MainDirection.SizeSquared() > FMath::Square(MinDistanceForRotation))
 	{
 		// Вместо прямой установки делаем плавную интерполяцию
@@ -183,4 +190,29 @@ void AArkhamCharacter::Input_RunReleased()
 {
 	UE_LOG(LogTemp, Warning, TEXT("*** INPUT: Run Button RELEASED ***"));
 	StopRun(); // базовый AHuman
+}
+
+FVector AArkhamCharacter::ChackVisibilityForSpringArm(FVector PawnLocation, FVector Target, float ProbSize,
+	TEnumAsByte<ECollisionChannel> ProbeChannel)
+{
+	if (!GetWorld()) return Target;
+	FHitResult HitResult;
+	FCollisionQueryParams CollisionQueryParams;
+	CollisionQueryParams.AddIgnoredActor(this);
+	if (GetWorld()->SweepSingleByChannel(
+		HitResult,
+		PawnLocation,
+		Target,
+		FQuat::Identity,
+		ProbeChannel,
+		FCollisionShape::MakeSphere(ProbSize),
+		CollisionQueryParams
+	))
+	{
+		// Если есть столкновение, возвращаем точку столкновения с небольшим отступом
+		FVector Direction = (Target - PawnLocation).GetSafeNormal();
+		return HitResult.Location - Direction * ProbSize;
+	}
+
+	return Target;
 }
