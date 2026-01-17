@@ -16,7 +16,8 @@ AArkhamCharacter::AArkhamCharacter()
 	SpringArmMain->SetupAttachment(GetRootComponent());
 	SpringArmMain->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // Высота камеры
 	
-	SpringArmMain->TargetArmLength = 350.0f; // Дистанция камеры
+	SpringArmMain->TargetArmLength = 0.0f; // Дистанция камеры
+	TargetSpringArmLength = 350.f; // Целевая дистанция камеры (для плавного изменения)
 	SpringArmMain->bUsePawnControlRotation = true; // ВАЖНО: следует за контроллером
 	
 	SpringArmMain->bEnableCameraLag = false; // Lag только на прокси
@@ -62,6 +63,32 @@ void AArkhamCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	SetupInputMapping();
+
+	TargetSpringArmFloatingLocation = GetActorForwardVector() * -TargetSpringArmLength + GetActorLocation();
+
+	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
+
+	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
+
+	GetController()->SetControlRotation(MainDirection.Rotation());
+}
+
+void AArkhamCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	FVector DistanceToTarget =  GetActorLocation() - TargetSpringArmFloatingLocation;
+	FVector Direction = DistanceToTarget.GetSafeNormal();
+	if (DistanceToTarget.Size() > TargetSpringArmLength)
+	{
+		
+		TargetSpringArmFloatingLocation = GetActorLocation() + -Direction * TargetSpringArmLength;
+	}
+
+	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
+	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
+
+	GetController()->SetControlRotation(MainDirection.Rotation());
 }
 
 void AArkhamCharacter::PawnClientRestart()
@@ -129,9 +156,9 @@ void AArkhamCharacter::Input_Move(const FInputActionValue& Value)
 
 void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 {
-	const FVector2D Axis = Value.Get<FVector2D>();
-	AddControllerYawInput(Axis.X);
-	AddControllerPitchInput(Axis.Y);
+	// const FVector2D Axis = Value.Get<FVector2D>();
+	// AddControllerYawInput(Axis.X);
+	// AddControllerPitchInput(Axis.Y);
 }
 
 void AArkhamCharacter::Input_RunPressed()
