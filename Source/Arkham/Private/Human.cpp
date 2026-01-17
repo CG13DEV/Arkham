@@ -200,10 +200,10 @@ void AHuman::UpdateRotation(float DeltaTime)
 		return;
 	}
 
-	// ============================================================
-	// 2. БЕГ - поворачиваемся к направлению движения
-	// ============================================================
-	if (bRunning)
+	// // ============================================================
+	// // 2. БЕГ - поворачиваемся к направлению движения
+	// // ============================================================
+	if (bRunning || true)
 	{
 		// Направление движения
 		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
@@ -219,25 +219,25 @@ void AHuman::UpdateRotation(float DeltaTime)
 		// DirectionView = 0 при беге (голова смотрит прямо)
 		DirectionView = FMath::FInterpTo(DirectionView, 0.f, DeltaTime, DirectionViewInterpSpeed);
 	}
-	// ============================================================
-	// 3. ХОДЬБА - поворачиваемся к контроллеру (камере)
-	// ============================================================
-	else
-	{
-		// Целевой yaw от контроллера
-		FRotator TargetRotation = FRotator(0.f, ControlRotation.Yaw, 0.f);
-		
-		// Плавный поворот к контроллеру
-		FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, WalkRotationRate / 180.f);
-		NewRotation.Pitch = 0.f;
-		NewRotation.Roll = 0.f;
-		
-		SetActorRotation(NewRotation);
-		
-		// DirectionView стремится к 0 (персонаж догоняет камеру)
-		float DeltaYaw = FMath::FindDeltaAngleDegrees(NewRotation.Yaw, ControlRotation.Yaw);
-		DirectionView = FMath::FInterpTo(DirectionView, DeltaYaw, DeltaTime, DirectionViewInterpSpeed);
-	}
+	// // ============================================================
+	// // 3. ХОДЬБА - поворачиваемся к контроллеру (камере)
+	// // ============================================================
+	// else
+	// {
+	// 	// Целевой yaw от контроллера
+	// 	FRotator TargetRotation = FRotator(0.f, ControlRotation.Yaw, 0.f);
+	// 	
+	// 	// Плавный поворот к контроллеру
+	// 	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, WalkRotationRate / 180.f);
+	// 	NewRotation.Pitch = 0.f;
+	// 	NewRotation.Roll = 0.f;
+	// 	
+	// 	SetActorRotation(NewRotation);
+	// 	
+	// 	// DirectionView стремится к 0 (персонаж догоняет камеру)
+	// 	float DeltaYaw = FMath::FindDeltaAngleDegrees(NewRotation.Yaw, ControlRotation.Yaw);
+	// 	DirectionView = FMath::FInterpTo(DirectionView, DeltaYaw, DeltaTime, DirectionViewInterpSpeed);
+	// }
 }
 
 bool AHuman::IsRunning() const
