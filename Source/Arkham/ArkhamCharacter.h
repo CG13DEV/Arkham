@@ -31,6 +31,10 @@ protected:
 	FVector TargetSpringArmFloatingLocation;
 	float TargetSpringArmLength;
 
+	// Режим Look камеры
+	bool bIsLookMode;
+	FVector LockedSpringArmPosition;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
 	TObjectPtr<USpringArmComponent> SpringArmProxy;
 
@@ -50,12 +54,18 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> IA_Run;
 
+	UPROPERTY(EditDefaultsOnly, Category="Input")
+	TObjectPtr<UInputAction> IA_Attack;
+
 	void SetupInputMapping();
 
 	void Input_Move(const FInputActionValue& Value);
 	void Input_Look(const FInputActionValue& Value);
+	void Input_LookReleased();
 	void Input_RunPressed();
 	void Input_RunReleased();
+
+	void Input_Attack(const FInputActionValue& Value);
 
 	FVector ChackVisibilityForSpringArm(FVector PawnLocation, FVector Target, float ProbSize, TEnumAsByte<ECollisionChannel> ProbeChannel);
 };

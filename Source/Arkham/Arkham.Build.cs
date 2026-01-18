@@ -10,7 +10,17 @@ public class Arkham : ModuleRules
 
 		PublicDependencyModuleNames.AddRange(new string[]
 		{
-			"Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "GameplayAbilities", "GameplayTags", "GameplayTasks"
+			"Core", 
+			"CoreUObject", 
+			"Engine", 
+			"InputCore", 
+			"EnhancedInput", 
+			"GameplayAbilities", 
+			"GameplayTags", 
+			"GameplayTasks",
+			"AIModule",
+			"NavigationSystem",
+			"StateTreeModule"
 		});
 	}
 }

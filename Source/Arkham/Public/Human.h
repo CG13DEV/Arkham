@@ -10,7 +10,8 @@ class UAbilitySystemComponent;
 class UHumanAttributeSet;
 class UGameplayEffect;
 class UGameplayAbility;
-	
+class UMeleeTraceComponent;
+
 UCLASS()
 class AHuman : public ACharacter, public IAbilitySystemInterface
 {
@@ -35,6 +36,41 @@ public:
 	/** Направление взгляда относительно персонажа для анимации поворота головы [-180, 180] */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	float GetDirectionView() const { return DirectionView; }
+
+	// === Здоровье ===
+	UFUNCTION(BlueprintCallable, Category="Health")
+	float GetHealth() const;
+
+	UFUNCTION(BlueprintCallable, Category="Health")
+	float GetMaxHealth() const;
+
+	UFUNCTION(BlueprintCallable, Category="Health")
+	bool IsDead() const { return bIsDead; }
+
+	/** Старый API: просто активирует GA по тегу */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void PerformMeleeAttack();
+
+	/** Новый API: "как в Thug" но без направлений: буфер ввода + повтор после завершения текущей атаки */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void RequestMeleeAttack();
+
+	/**
+	 * Эти функции вызываются из Montage Notify / NotifyState.
+	 * Внутри они запускают/останавливают активный MeleeTraceComponent (оружие или кулак).
+	 */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void StartMeleeTrace();
+
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void StopMeleeTrace();
+
+	/**
+	 * При экипировке мили-оружия — передай сюда актор оружия.
+	 * Мы возьмём у него UMeleeTraceComponent и будем использовать его вместо Unarmed.
+	 */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void SetMeleeTraceSourceActor(AActor* InSourceActor);
 
 protected:
 	virtual void BeginPlay() override;
@@ -66,6 +102,12 @@ protected:
 	// Делегаты
 	void OnMoveSpeedChanged(const struct FOnAttributeChangeData& Data);
 	void OnRunningTagChanged(const FGameplayTag Tag, int32 NewCount);
+	void OnHealthChanged(const struct FOnAttributeChangeData& Data);
+	void OnDeathTagAdded(const FGameplayTag Tag, int32 NewCount);
+
+	// Обработка смерти
+	void HandleDeath();
+	void EnableRagdoll();
 
 	// Включение поворота “в камеру” (ходьба) / “в движение” (бег)
 	void ApplyLocomotionConfig(bool bRunning);
@@ -76,6 +118,9 @@ protected:
 	// Теги
 	FGameplayTag Tag_State_Running;
 	FGameplayTag Tag_Ability_Run;
+	FGameplayTag Tag_Ability_MeleeAttack;
+	FGameplayTag Tag_State_Dead;
+	FGameplayTag Tag_State_Attacking;
 
 	// Параметры
 	UPROPERTY(EditDefaultsOnly, Category="Movement")
@@ -91,6 +136,41 @@ protected:
 	/** Скорость интерполяции DirectionView */
 	UPROPERTY(EditDefaultsOnly, Category="Animation")
 	float DirectionViewInterpSpeed = 10.f;
+
+	/** Монтаж анимации получения урона */
+	UPROPERTY(EditDefaultsOnly, Category="Combat")
+	TObjectPtr<UAnimMontage> HitReactionMontage;
+
+	/** Монтаж анимации смерти (опционально, перед рэгдоллом) */
+	UPROPERTY(EditDefaultsOnly, Category="Combat")
+	TObjectPtr<UAnimMontage> DeathMontage;
+
+	/** Флаг смерти */
+	bool bIsDead = false;
+
+	// === Ближний бой (без направлений) ===
+	bool bAttackInputBuffered = false;
+	float LastMeleeAbilityStartTime = -1000.f;
+
+	/** Через сколько секунд после старта атаки разрешаем буфер (чтобы не словить двойной триггер на один клик) */
+	UPROPERTY(EditDefaultsOnly, Category="Combat")
+	float MinAttackTimeBeforeBuffer = 0.05f;
+
+	/** Трейсер кулака */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UMeleeTraceComponent> UnarmedMeleeTrace;
+
+	/** Трейсер активного оружия (если задан через SetMeleeTraceSourceActor) */
+	UPROPERTY(Transient, BlueprintReadOnly, Category="Combat", meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UMeleeTraceComponent> ActiveWeaponMeleeTrace;
+
+	TWeakObjectPtr<AActor> MeleeTraceSourceActor;
+
+	UMeleeTraceComponent* ResolveMeleeTraceComponent() const;
+
+	/** Вызывается GA_MeleeAttack при завершении монтажа (для обработки буфера ввода) */
+	void OnMeleeAttackAbilityEnded();
+	friend class UGA_MeleeAttack;
 
 private:
 	/** Направление взгляда относительно персонажа (для анимации головы) */

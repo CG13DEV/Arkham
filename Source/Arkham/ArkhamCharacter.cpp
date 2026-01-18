@@ -56,6 +56,10 @@ AArkhamCharacter::AArkhamCharacter()
 	// Автоматически добавляем способность бега в DefaultAbilities
 	// Это позволяет не настраивать Blueprint вручную
 	DefaultAbilities.Add(UGA_HumanRun::StaticClass());
+
+	// Инициализация режима Look
+	bIsLookMode = false;
+	LockedSpringArmPosition = FVector::ZeroVector;
 }
 
 
@@ -76,6 +80,12 @@ void AArkhamCharacter::BeginPlay()
 void AArkhamCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// В режиме Look не обновляем позицию камеры
+	if (bIsLookMode)
+	{
+		return;
+	}
 
 	FVector DistanceToTarget =  GetActorLocation() - TargetSpringArmFloatingLocation;
 	FVector Direction = DistanceToTarget.GetSafeNormal();
@@ -147,7 +157,11 @@ void AArkhamCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EIC->BindAction(IA_Move, ETriggerEvent::Triggered, this, &AArkhamCharacter::Input_Move);
 
 	if (IA_Look)
+	{
 		EIC->BindAction(IA_Look, ETriggerEvent::Triggered, this, &AArkhamCharacter::Input_Look);
+		EIC->BindAction(IA_Look, ETriggerEvent::Completed, this, &AArkhamCharacter::Input_LookReleased);
+		EIC->BindAction(IA_Look, ETriggerEvent::Canceled, this, &AArkhamCharacter::Input_LookReleased);
+	}
 
 	if (IA_Run)
 	{
@@ -155,6 +169,9 @@ void AArkhamCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 		EIC->BindAction(IA_Run, ETriggerEvent::Completed, this, &AArkhamCharacter::Input_RunReleased);
 		EIC->BindAction(IA_Run, ETriggerEvent::Canceled, this, &AArkhamCharacter::Input_RunReleased);
 	}
+
+	if (IA_Attack)
+		EIC->BindAction(IA_Attack, ETriggerEvent::Started, this, &AArkhamCharacter::Input_Attack);
 }
 
 void AArkhamCharacter::Input_Move(const FInputActionValue& Value)
@@ -175,9 +192,38 @@ void AArkhamCharacter::Input_Move(const FInputActionValue& Value)
 
 void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 {
-	// const FVector2D Axis = Value.Get<FVector2D>();
-	// AddControllerYawInput(Axis.X);
-	// AddControllerPitchInput(Axis.Y);
+	const FVector2D Axis = Value.Get<FVector2D>();
+	
+	// Проверяем, есть ли инпут (начало Look режима)
+	if (!bIsLookMode && (FMath::Abs(Axis.X) > 0.01f || FMath::Abs(Axis.Y) > 0.01f))
+	{
+		// Входим в режим Look
+		bIsLookMode = true;
+		
+		// Получаем точку крепления на персонаже (корень + offset)
+		FVector AttachPoint = GetActorLocation() + FVector(0.f, 0.f, 60.f);
+		
+		// Запоминаем текущую позицию SpringArmMain
+		LockedSpringArmPosition = SpringArmMain->GetComponentLocation();
+		
+		// Вычисляем расстояние от камеры до точки крепления
+		float Distance = FVector::Dist(LockedSpringArmPosition, AttachPoint);
+		
+		// Перемещаем SpringArmMain в точку крепления
+		SpringArmMain->SetWorldLocation(AttachPoint);
+		
+		// Устанавливаем TargetArmLength на вычисленное расстояние
+		SpringArmMain->TargetArmLength = Distance;
+		
+		UE_LOG(LogTemp, Warning, TEXT("*** LOOK MODE ACTIVATED: Distance = %.2f ***"), Distance);
+	}
+	
+	// Применяем вращение камеры
+	if (bIsLookMode)
+	{
+		AddControllerYawInput(Axis.X);
+		AddControllerPitchInput(Axis.Y);
+	}
 }
 
 void AArkhamCharacter::Input_RunPressed()
@@ -190,6 +236,11 @@ void AArkhamCharacter::Input_RunReleased()
 {
 	UE_LOG(LogTemp, Warning, TEXT("*** INPUT: Run Button RELEASED ***"));
 	StopRun(); // базовый AHuman
+}
+
+void AArkhamCharacter::Input_Attack(const FInputActionValue& Value)
+{
+	RequestMeleeAttack();
 }
 
 FVector AArkhamCharacter::ChackVisibilityForSpringArm(FVector PawnLocation, FVector Target, float ProbSize,

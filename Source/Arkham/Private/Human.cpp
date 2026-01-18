@@ -4,8 +4,11 @@
 #include "GameplayEffect.h"
 #include "GameplayTagsManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/CapsuleComponent.h"
 
 #include "HumanAttributeSet.h"
+
+#include "MeleeTraceComponent.h"
 
 AHuman::AHuman()
 {
@@ -16,6 +19,8 @@ AHuman::AHuman()
 	AbilitySystem->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
 
 	Attributes = CreateDefaultSubobject<UHumanAttributeSet>(TEXT("HumanAttributes"));
+
+	UnarmedMeleeTrace = CreateDefaultSubobject<UMeleeTraceComponent>(TEXT("MeleeTrace_Unarmed"));
 
 	// Персонаж НЕ поворачивается автоматически от контроллера
 	bUseControllerRotationPitch = false;
@@ -37,6 +42,9 @@ AHuman::AHuman()
 
 	Tag_State_Running = FGameplayTag::RequestGameplayTag(TEXT("State.Movement.Running"));
 	Tag_Ability_Run   = FGameplayTag::RequestGameplayTag(TEXT("Ability.Movement.Run"));
+	Tag_Ability_MeleeAttack = FGameplayTag::RequestGameplayTag(TEXT("Ability.Combat.MeleeAttack"));
+	Tag_State_Dead = FGameplayTag::RequestGameplayTag(TEXT("State.Dead"));
+	Tag_State_Attacking = FGameplayTag::RequestGameplayTag(TEXT("State.Combat.Attacking"));
 }
 
 UAbilitySystemComponent* AHuman::GetAbilitySystemComponent() const
@@ -155,6 +163,14 @@ void AHuman::BindASCDelegates()
 
 	AbilitySystem->RegisterGameplayTagEvent(Tag_State_Running, EGameplayTagEventType::NewOrRemoved)
 		.AddUObject(this, &AHuman::OnRunningTagChanged);
+
+	// Подписка на изменения здоровья
+	AbilitySystem->GetGameplayAttributeValueChangeDelegate(UHumanAttributeSet::GetHealthAttribute())
+		.AddUObject(this, &AHuman::OnHealthChanged);
+
+	// Подписка на тег смерти
+	AbilitySystem->RegisterGameplayTagEvent(Tag_State_Dead, EGameplayTagEventType::NewOrRemoved)
+		.AddUObject(this, &AHuman::OnDeathTagAdded);
 }
 
 void AHuman::OnMoveSpeedChanged(const FOnAttributeChangeData& Data)
@@ -209,7 +225,6 @@ void AHuman::UpdateRotation(float DeltaTime)
 		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
 		
 		// Плавный поворот к направлению движения
-		const float RotationSpeed = RunRotationRate * DeltaTime;
 		FRotator NewRotation = FMath::RInterpTo(CurrentRotation, VelocityRotation, DeltaTime, RunRotationRate / 180.f);
 		NewRotation.Pitch = 0.f;
 		NewRotation.Roll = 0.f;
@@ -298,3 +313,228 @@ void AHuman::StopRun()
 	UE_LOG(LogTemp, Warning, TEXT("AHuman::StopRun - Cancel request sent"));
 }
 
+// === Функции здоровья ===
+
+float AHuman::GetHealth() const
+{
+	return Attributes ? Attributes->GetHealth() : 0.f;
+}
+
+float AHuman::GetMaxHealth() const
+{
+	return Attributes ? Attributes->GetMaxHealth() : 0.f;
+}
+
+void AHuman::PerformMeleeAttack()
+{
+	if (!AbilitySystem || bIsDead)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AHuman::PerformMeleeAttack - Cannot attack (ASC=%s, Dead=%s)"),
+			AbilitySystem ? TEXT("Valid") : TEXT("NULL"), bIsDead ? TEXT("YES") : TEXT("NO"));
+		return;
+	}
+
+	// Активируем способность атаки по тегу
+	for (const FGameplayAbilitySpec& Spec : AbilitySystem->GetActivatableAbilities())
+	{
+		if (Spec.Ability && Spec.Ability->AbilityTags.HasTag(Tag_Ability_MeleeAttack))
+		{
+			bool bSuccess = AbilitySystem->TryActivateAbility(Spec.Handle);
+			UE_LOG(LogTemp, Warning, TEXT("AHuman::PerformMeleeAttack - Activation result: %s"), 
+				bSuccess ? TEXT("SUCCESS") : TEXT("FAILED"));
+			return;
+		}
+	}
+
+	UE_LOG(LogTemp, Error, TEXT("AHuman::PerformMeleeAttack - Ability.Combat.MeleeAttack NOT FOUND!"));
+}
+
+
+void AHuman::RequestMeleeAttack()
+{
+	if (!AbilitySystem || bIsDead)
+		return;
+
+	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+
+	// Если уже атакуем — буферизуем (как в Thug), но только спустя небольшой порог времени
+	if (AbilitySystem->HasMatchingGameplayTag(Tag_State_Attacking))
+	{
+		if ((Now - LastMeleeAbilityStartTime) >= MinAttackTimeBeforeBuffer)
+		{
+			bAttackInputBuffered = true;
+		}
+		return;
+	}
+
+	bAttackInputBuffered = false;
+	LastMeleeAbilityStartTime = Now;
+	PerformMeleeAttack();
+}
+
+UMeleeTraceComponent* AHuman::ResolveMeleeTraceComponent() const
+{
+	if (ActiveWeaponMeleeTrace)
+		return ActiveWeaponMeleeTrace;
+	return UnarmedMeleeTrace;
+}
+
+void AHuman::StartMeleeTrace()
+{
+	if (!AbilitySystem || bIsDead)
+		return;
+
+	if (UMeleeTraceComponent* Tracer = ResolveMeleeTraceComponent())
+	{
+		Tracer->StartTrace(AbilitySystem, this);
+	}
+}
+
+void AHuman::StopMeleeTrace()
+{
+	// Безопасно стопаем оба, на случай переключения источника во время окна
+	if (UnarmedMeleeTrace)
+	{
+		UnarmedMeleeTrace->StopTrace();
+	}
+	if (ActiveWeaponMeleeTrace && ActiveWeaponMeleeTrace != UnarmedMeleeTrace)
+	{
+		ActiveWeaponMeleeTrace->StopTrace();
+	}
+}
+
+void AHuman::SetMeleeTraceSourceActor(AActor* InSourceActor)
+{
+	MeleeTraceSourceActor = InSourceActor;
+	ActiveWeaponMeleeTrace = nullptr;
+
+	if (InSourceActor)
+	{
+		ActiveWeaponMeleeTrace = InSourceActor->FindComponentByClass<UMeleeTraceComponent>();
+	}
+}
+
+void AHuman::OnMeleeAttackAbilityEnded()
+{
+	StopMeleeTrace();
+
+	if (!AbilitySystem || bIsDead)
+		return;
+
+	if (!bAttackInputBuffered)
+		return;
+
+	bAttackInputBuffered = false;
+
+	// Запускаем следующую атаку на следующий тик, чтобы тег State.Combat.Attacking успел сняться
+	GetWorldTimerManager().SetTimerForNextTick([this]()
+	{
+		RequestMeleeAttack();
+	});
+}
+
+void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
+{
+	const float Delta = Data.NewValue - Data.OldValue;
+	
+	UE_LOG(LogTemp, Warning, TEXT("AHuman::OnHealthChanged - Health: %.1f -> %.1f (Delta: %.1f)"), 
+		Data.OldValue, Data.NewValue, Delta);
+
+	// Если получили урон (здоровье уменьшилось)
+	if (Delta < 0.f && !bIsDead)
+	{
+		// Проигрываем анимацию получения урона
+		if (HitReactionMontage)
+		{
+			UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+			if (AnimInstance && !AnimInstance->Montage_IsPlaying(HitReactionMontage))
+			{
+				AnimInstance->Montage_Play(HitReactionMontage);
+			}
+		}
+
+		// Проверяем смерть
+		if (Data.NewValue <= 0.f)
+		{
+			HandleDeath();
+		}
+	}
+}
+
+void AHuman::OnDeathTagAdded(const FGameplayTag Tag, int32 NewCount)
+{
+	if (NewCount > 0 && !bIsDead)
+	{
+		HandleDeath();
+	}
+}
+
+void AHuman::HandleDeath()
+{
+	if (bIsDead)
+		return;
+
+	bIsDead = true;
+
+	StopMeleeTrace();
+
+	UE_LOG(LogTemp, Warning, TEXT("AHuman::HandleDeath - Character is now dead!"));
+
+	// Добавляем тег смерти
+	if (AbilitySystem)
+	{
+		FGameplayTagContainer DeathTags;
+		DeathTags.AddTag(Tag_State_Dead);
+		AbilitySystem->AddLooseGameplayTags(DeathTags);
+
+		// Отменяем все активные способности
+		AbilitySystem->CancelAllAbilities();
+	}
+
+	// Отключаем контроллер (опционально)
+	if (Controller)
+	{
+		Controller->UnPossess();
+	}
+
+	// Проигрываем анимацию смерти (если есть)
+	if (DeathMontage)
+	{
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance)
+		{
+			AnimInstance->Montage_Play(DeathMontage);
+			
+			// Включаем рэгдолл после завершения анимации
+			FTimerHandle DeathTimerHandle;
+			GetWorldTimerManager().SetTimer(DeathTimerHandle, this, &AHuman::EnableRagdoll, 
+				DeathMontage->GetPlayLength(), false);
+			return;
+		}
+	}
+
+	// Если нет анимации смерти - сразу включаем рэгдолл
+	EnableRagdoll();
+}
+
+void AHuman::EnableRagdoll()
+{
+	UE_LOG(LogTemp, Warning, TEXT("AHuman::EnableRagdoll - Enabling ragdoll physics"));
+
+	// Отключаем капсулу коллизии
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	// Включаем физику для меша
+	USkeletalMeshComponent* MeshComp = GetMesh();
+	if (MeshComp)
+	{
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComp->SetCollisionProfileName(TEXT("Ragdoll"));
+		MeshComp->SetSimulatePhysics(true);
+		MeshComp->WakeAllRigidBodies();
+		
+		// Отключаем CharacterMovement
+		GetCharacterMovement()->DisableMovement();
+		GetCharacterMovement()->StopMovementImmediately();
+	}
+}
