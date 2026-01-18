@@ -8,6 +8,7 @@
 #include "InputActionValue.h"
 
 #include "GA_HumanRun.h" // Для автоматической регистрации способности бега
+#include "Kismet/KismetMathLibrary.h"
 
 AArkhamCharacter::AArkhamCharacter()
 {
@@ -93,6 +94,15 @@ void AArkhamCharacter::Tick(float DeltaTime)
 	{
 		
 		TargetSpringArmFloatingLocation = GetActorLocation() + -Direction * TargetSpringArmLength;
+	} else if (DistanceToTarget.SizeSquared() < FMath::Square(150.f))
+	{
+		TargetSpringArmFloatingLocation = UKismetMathLibrary::VInterpTo
+		(
+			TargetSpringArmFloatingLocation,
+			GetActorLocation() + -DistanceToTarget * 1.25f,
+			DeltaTime,
+			15.f
+		);
 	}
 
 	TargetSpringArmFloatingLocation = ChackVisibilityForSpringArm(
@@ -106,7 +116,7 @@ void AArkhamCharacter::Tick(float DeltaTime)
 	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
 
 	// Проверяем, достаточно ли велико расстояние для стабильного вычисления ротации
-	const float MinDistanceForRotation = 50.f; // Минимальное расстояние для избежания нестабильности
+	const float MinDistanceForRotation = 150.f; // Минимальное расстояние для избежания нестабильности
 	if (MainDirection.SizeSquared() > FMath::Square(MinDistanceForRotation))
 	{
 		// Вместо прямой установки делаем плавную интерполяцию
@@ -201,7 +211,7 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 		bIsLookMode = true;
 		
 		// Получаем точку крепления на персонаже (корень + offset)
-		FVector AttachPoint = GetActorLocation() + FVector(0.f, 0.f, 60.f);
+		FVector AttachPoint = GetActorLocation() + FVector(0.f, 0.f, 80.f);
 		
 		// Запоминаем текущую позицию SpringArmMain
 		LockedSpringArmPosition = SpringArmMain->GetComponentLocation();
@@ -210,7 +220,7 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 		float Distance = FVector::Dist(LockedSpringArmPosition, AttachPoint);
 		
 		// Перемещаем SpringArmMain в точку крепления
-		SpringArmMain->SetWorldLocation(AttachPoint);
+		SpringArmMain->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
 		
 		// Устанавливаем TargetArmLength на вычисленное расстояние
 		SpringArmMain->TargetArmLength = Distance;
@@ -222,7 +232,44 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 	if (bIsLookMode)
 	{
 		AddControllerYawInput(Axis.X);
-		AddControllerPitchInput(Axis.Y);
+		// AddControllerPitchInput(Axis.Y);
+	}
+}
+
+void AArkhamCharacter::Input_LookReleased()
+{
+	if (!bIsLookMode)
+	{
+		return;
+	}
+	
+	UE_LOG(LogTemp, Warning, TEXT("*** LOOK MODE DEACTIVATED ***"));
+	
+	// Выходим из режима Look
+	bIsLookMode = false;
+	
+	// Получаем текущую позицию камеры в мире
+	FVector CameraWorldLocation = FollowCamera->GetComponentLocation();
+	
+	// Проецируем позицию камеры на горизонтальную плоскость персонажа
+	FVector ActorLocation = GetActorLocation();
+	FVector ProjectedCameraLocation = CameraWorldLocation;
+	ProjectedCameraLocation.Z = ActorLocation.Z; // Проекция на плоскость персонажа
+	
+	// Обновляем TargetSpringArmFloatingLocation на спроецированную позицию
+	TargetSpringArmFloatingLocation = ProjectedCameraLocation;
+	
+	// Возвращаем SpringArmMain на правильную позицию с учетом высоты
+	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
+	
+	// Сбрасываем TargetArmLength обратно в 0
+	SpringArmMain->TargetArmLength = 0.0f;
+	
+	// Обновляем ротацию контроллера
+	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
+	if (MainDirection.SizeSquared() > FMath::Square(50.f))
+	{
+		GetController()->SetControlRotation(MainDirection.Rotation());
 	}
 }
 

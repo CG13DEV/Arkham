@@ -28,11 +28,7 @@ void AHumanBot::SetTarget(AActor* NewTarget)
 		return;
 
 	CurrentTarget = NewTarget;
-	
-	// ✅ CurrentTarget установлен (C++ переменная бота)
-	// ❌ State Tree параметр TargetActor НЕ обновляется автоматически!
-	// ❌ Нет связи между CurrentTarget и State Tree TargetActor!
-	
+}
 void AHumanBot::ClearTarget()
 {
 	CurrentTarget = nullptr;
