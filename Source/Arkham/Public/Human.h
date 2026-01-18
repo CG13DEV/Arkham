@@ -11,6 +11,7 @@ class UHumanAttributeSet;
 class UGameplayEffect;
 class UGameplayAbility;
 class UMeleeTraceComponent;
+class UTargetLockComponent;
 
 UCLASS()
 class AHuman : public ACharacter, public IAbilitySystemInterface
@@ -36,6 +37,16 @@ public:
 	/** Направление взгляда относительно персонажа для анимации поворота головы [-180, 180] */
 	UFUNCTION(BlueprintCallable, Category="Animation")
 	float GetDirectionView() const { return DirectionView; }
+
+	// === Target Lock ===
+	UFUNCTION(BlueprintCallable, Category="Combat|TargetLock")
+	UTargetLockComponent* GetTargetLockComponent() const { return TargetLockComponent; }
+
+	UFUNCTION(BlueprintCallable, Category="Combat|TargetLock")
+	bool IsTargetLocked() const;
+
+	UFUNCTION(BlueprintCallable, Category="Combat|TargetLock")
+	AActor* GetLockedTarget() const;
 
 	// === Здоровье ===
 	UFUNCTION(BlueprintCallable, Category="Health")
@@ -84,6 +95,10 @@ protected:
 
 	UPROPERTY()
 	TObjectPtr<UHumanAttributeSet> Attributes;
+
+	// --- Target Lock ---
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat")
+	TObjectPtr<UTargetLockComponent> TargetLockComponent;
 
 	UPROPERTY(EditDefaultsOnly, Category="GAS")
 	TArray<TSubclassOf<UGameplayAbility>> DefaultAbilities;

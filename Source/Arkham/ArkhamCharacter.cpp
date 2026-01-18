@@ -8,6 +8,7 @@
 #include "InputActionValue.h"
 
 #include "GA_HumanRun.h" // Для автоматической регистрации способности бега
+#include "TargetLockComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 
 AArkhamCharacter::AArkhamCharacter()
@@ -18,7 +19,7 @@ AArkhamCharacter::AArkhamCharacter()
 	SpringArmMain->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // Высота камеры
 	
 	SpringArmMain->TargetArmLength = 0.0f; // Дистанция камеры
-	TargetSpringArmLength = 350.f; // Целевая дистанция камеры (для плавного изменения)
+	TargetSpringArmLength = 500.f; // Целевая дистанция камеры (для плавного изменения)
 	SpringArmMain->bUsePawnControlRotation = true; // ВАЖНО: следует за контроллером
 	
 	SpringArmMain->bEnableCameraLag = false; // Lag только на прокси
@@ -87,21 +88,22 @@ void AArkhamCharacter::Tick(float DeltaTime)
 	{
 		return;
 	}
-
+	
 	FVector DistanceToTarget =  GetActorLocation() - TargetSpringArmFloatingLocation;
 	FVector Direction = DistanceToTarget.GetSafeNormal();
+	
 	if (DistanceToTarget.SizeSquared() > FMath::Square(TargetSpringArmLength))
 	{
 		
 		TargetSpringArmFloatingLocation = GetActorLocation() + -Direction * TargetSpringArmLength;
-	} else if (DistanceToTarget.SizeSquared() < FMath::Square(150.f))
+	} else if (DistanceToTarget.SizeSquared() < FMath::Square(MinSpringArmLength))
 	{
 		TargetSpringArmFloatingLocation = UKismetMathLibrary::VInterpTo
 		(
 			TargetSpringArmFloatingLocation,
-			GetActorLocation() + -DistanceToTarget * 1.25f,
+			GetActorLocation() + -Direction * MinSpringArmLength,
 			DeltaTime,
-			15.f
+			25.f
 		);
 	}
 
@@ -182,6 +184,12 @@ void AArkhamCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCom
 
 	if (IA_Attack)
 		EIC->BindAction(IA_Attack, ETriggerEvent::Started, this, &AArkhamCharacter::Input_Attack);
+
+	if (IA_TargetLock)
+		EIC->BindAction(IA_TargetLock, ETriggerEvent::Started, this, &AArkhamCharacter::Input_TargetLock);
+
+	if (IA_SwitchTarget)
+		EIC->BindAction(IA_SwitchTarget, ETriggerEvent::Started, this, &AArkhamCharacter::Input_SwitchTarget);
 }
 
 void AArkhamCharacter::Input_Move(const FInputActionValue& Value)
@@ -223,7 +231,7 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 		SpringArmMain->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
 		
 		// Устанавливаем TargetArmLength на вычисленное расстояние
-		SpringArmMain->TargetArmLength = Distance;
+		SpringArmMain->TargetArmLength = Distance*1.0f;
 		
 		UE_LOG(LogTemp, Warning, TEXT("*** LOOK MODE ACTIVATED: Distance = %.2f ***"), Distance);
 	}
@@ -290,6 +298,34 @@ void AArkhamCharacter::Input_Attack(const FInputActionValue& Value)
 	RequestMeleeAttack();
 }
 
+void AArkhamCharacter::Input_TargetLock()
+{
+	if (TargetLockComponent)
+	{
+		TargetLockComponent->ToggleTargetLock();
+		UE_LOG(LogTemp, Warning, TEXT("*** TARGET LOCK TOGGLED: %s ***"), 
+			TargetLockComponent->IsTargetLocked() ? TEXT("LOCKED") : TEXT("UNLOCKED"));
+	}
+}
+
+void AArkhamCharacter::Input_SwitchTarget(const FInputActionValue& Value)
+{
+	if (!TargetLockComponent || !TargetLockComponent->IsTargetLocked())
+		return;
+
+	const FVector2D Axis = Value.Get<FVector2D>();
+	
+	// Переключение влево/вправо на основе инпута
+	if (Axis.X > 0.5f)
+	{
+		TargetLockComponent->SwitchTargetRight();
+	}
+	else if (Axis.X < -0.5f)
+	{
+		TargetLockComponent->SwitchTargetLeft();
+	}
+}
+
 FVector AArkhamCharacter::ChackVisibilityForSpringArm(FVector PawnLocation, FVector Target, float ProbSize,
 	TEnumAsByte<ECollisionChannel> ProbeChannel)
 {
@@ -297,6 +333,15 @@ FVector AArkhamCharacter::ChackVisibilityForSpringArm(FVector PawnLocation, FVec
 	FHitResult HitResult;
 	FCollisionQueryParams CollisionQueryParams;
 	CollisionQueryParams.AddIgnoredActor(this);
+	if (TargetLockComponent->IsTargetLocked())
+	{
+		AActor * LockedTarget = TargetLockComponent->GetCurrentTarget();
+		if (LockedTarget)
+		{
+			CollisionQueryParams.AddIgnoredActor(LockedTarget);
+		}
+	}
+	
 	if (GetWorld()->SweepSingleByChannel(
 		HitResult,
 		PawnLocation,

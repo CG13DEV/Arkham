@@ -9,6 +9,7 @@
 #include "HumanAttributeSet.h"
 
 #include "MeleeTraceComponent.h"
+#include "TargetLockComponent.h"
 
 AHuman::AHuman()
 {
@@ -21,6 +22,9 @@ AHuman::AHuman()
 	Attributes = CreateDefaultSubobject<UHumanAttributeSet>(TEXT("HumanAttributes"));
 
 	UnarmedMeleeTrace = CreateDefaultSubobject<UMeleeTraceComponent>(TEXT("MeleeTrace_Unarmed"));
+
+	// Target Lock компонент
+	TargetLockComponent = CreateDefaultSubobject<UTargetLockComponent>(TEXT("TargetLock"));
 
 	// Персонаж НЕ поворачивается автоматически от контроллера
 	bUseControllerRotationPitch = false;
@@ -200,12 +204,19 @@ void AHuman::UpdateRotation(float DeltaTime)
 	const bool bIsMoving = Speed > 1.0f;
 	const bool bRunning = IsRunning();
 
-
 	// ============================================================
 	// 1. СТОИТ НА МЕСТЕ - только поворачиваем голову (DirectionView)
 	// ============================================================
 	if (!bIsMoving)
 	{
+		// Если есть Target Lock - поворачиваемся к цели
+		if (IsTargetLocked())
+		{
+			DirectionView = 0.f;
+			// TargetLockComponent управляет поворотом в Tick
+			return;
+		}
+
 		// Вычисляем разницу между направлением взгляда и персонажа
 		float DeltaYaw = FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, ControlRotation.Yaw);
 		
@@ -216,10 +227,11 @@ void AHuman::UpdateRotation(float DeltaTime)
 		return;
 	}
 
-	// // ============================================================
-	// // 2. БЕГ - поворачиваемся к направлению движения
-	// // ============================================================
-	if (bRunning || true)
+	// ============================================================
+	// 2. БЕГ - ВСЕГДА поворачиваемся к направлению движения
+	//    (даже если есть Target Lock!)
+	// ============================================================
+	if (bRunning)
 	{
 		// Направление движения
 		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
@@ -234,30 +246,49 @@ void AHuman::UpdateRotation(float DeltaTime)
 		// DirectionView = 0 при беге (голова смотрит прямо)
 		DirectionView = FMath::FInterpTo(DirectionView, 0.f, DeltaTime, DirectionViewInterpSpeed);
 	}
-	// // ============================================================
-	// // 3. ХОДЬБА - поворачиваемся к контроллеру (камере)
-	// // ============================================================
-	// else
-	// {
-	// 	// Целевой yaw от контроллера
-	// 	FRotator TargetRotation = FRotator(0.f, ControlRotation.Yaw, 0.f);
-	// 	
-	// 	// Плавный поворот к контроллеру
-	// 	FRotator NewRotation = FMath::RInterpTo(CurrentRotation, TargetRotation, DeltaTime, WalkRotationRate / 180.f);
-	// 	NewRotation.Pitch = 0.f;
-	// 	NewRotation.Roll = 0.f;
-	// 	
-	// 	SetActorRotation(NewRotation);
-	// 	
-	// 	// DirectionView стремится к 0 (персонаж догоняет камеру)
-	// 	float DeltaYaw = FMath::FindDeltaAngleDegrees(NewRotation.Yaw, ControlRotation.Yaw);
-	// 	DirectionView = FMath::FInterpTo(DirectionView, DeltaYaw, DeltaTime, DirectionViewInterpSpeed);
-	// }
+	// ============================================================
+	// 3. ХОДЬБА - поворот к Target Lock (если есть) или по направлению движения
+	// ============================================================
+	else
+	{
+		// Если активен Target Lock - TargetLockComponent управляет поворотом (STRAFE)
+		if (IsTargetLocked())
+		{
+			DirectionView = 0.f;
+			// TargetLockComponent управляет поворотом в Tick
+			return;
+		}
+
+		// БЕЗ Target Lock - поворачиваемся по направлению движения (как при беге, но медленнее)
+		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
+		
+		// Плавный поворот к направлению движения
+		FRotator NewRotation = FMath::RInterpTo(CurrentRotation, VelocityRotation, DeltaTime, WalkRotationRate / 180.f);
+		NewRotation.Pitch = 0.f;
+		NewRotation.Roll = 0.f;
+		
+		SetActorRotation(NewRotation);
+		
+		// DirectionView = 0 при движении (голова смотрит прямо)
+		DirectionView = FMath::FInterpTo(DirectionView, 0.f, DeltaTime, DirectionViewInterpSpeed);
+	}
 }
 
 bool AHuman::IsRunning() const
 {
 	return AbilitySystem && AbilitySystem->HasMatchingGameplayTag(Tag_State_Running);
+}
+
+// === Target Lock ===
+
+bool AHuman::IsTargetLocked() const
+{
+	return TargetLockComponent && TargetLockComponent->IsTargetLocked();
+}
+
+AActor* AHuman::GetLockedTarget() const
+{
+	return TargetLockComponent ? TargetLockComponent->GetCurrentTarget() : nullptr;
 }
 
 void AHuman::StartRun()

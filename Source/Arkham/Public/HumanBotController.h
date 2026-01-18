@@ -19,6 +19,8 @@ class ARKHAM_API AHumanBotController : public AAIController
 public:
 	AHumanBotController();
 
+	virtual void Tick(float DeltaTime) override;
+
 protected:
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void BeginPlay() override;

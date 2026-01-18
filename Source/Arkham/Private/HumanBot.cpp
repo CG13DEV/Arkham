@@ -3,6 +3,7 @@
 #include "Net/UnrealNetwork.h"
 #include "HumanBotController.h"
 #include "Perception/AIPerceptionComponent.h"
+#include "TargetLockComponent.h"
 
 AHumanBot::AHumanBot()
 {
@@ -28,10 +29,22 @@ void AHumanBot::SetTarget(AActor* NewTarget)
 		return;
 
 	CurrentTarget = NewTarget;
+
+	// Используем TargetLockComponent для автоматического поворота к цели
+	if (TargetLockComponent)
+	{
+		TargetLockComponent->SetTarget(NewTarget, true);
+	}
 }
 void AHumanBot::ClearTarget()
 {
 	CurrentTarget = nullptr;
+	
+	// Очищаем Target Lock
+	if (TargetLockComponent)
+	{
+		TargetLockComponent->ClearTarget();
+	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s cleared target"), *GetName());
 }
@@ -93,18 +106,32 @@ void AHumanBot::ExecuteAttack()
 		return;
 	}
 
-	// Поворачиваемся к цели
-	const FVector Direction = (CurrentTarget->GetActorLocation() - GetActorLocation()).GetSafeNormal2D();
-	if (!Direction.IsNearlyZero())
-	{
-		SetActorRotation(Direction.Rotation());
-	}
+	// TargetLockComponent автоматически поворачивает персонажа к цели
+	// Не нужно вручную устанавливать rotation
 
 	// Выполняем атаку через GAS
 	PerformMeleeAttack();
 	LastAttackTime = GetWorld()->GetTimeSeconds();
 
 	UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s attacking target: %s"), *GetName(), *CurrentTarget->GetName());
+}
+
+void AHumanBot::StartRunningToTarget()
+{
+	if (!IsRunning())
+	{
+		StartRun();
+		UE_LOG(LogTemp, Log, TEXT("HumanBot: %s started running to target"), *GetName());
+	}
+}
+
+void AHumanBot::StopRunningToTarget()
+{
+	if (IsRunning())
+	{
+		StopRun();
+		UE_LOG(LogTemp, Log, TEXT("HumanBot: %s stopped running"), *GetName());
+	}
 }
 
 void AHumanBot::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const

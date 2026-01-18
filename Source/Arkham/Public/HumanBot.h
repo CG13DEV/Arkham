@@ -48,6 +48,20 @@ public:
 	UFUNCTION(BlueprintCallable, Category="AI")
 	bool CanAttack() const;
 
+	/** Начать бег к цели */
+	UFUNCTION(BlueprintCallable, Category="AI")
+	void StartRunningToTarget();
+
+	/** Остановить бег */
+	UFUNCTION(BlueprintCallable, Category="AI")
+	void StopRunningToTarget();
+
+	/** Получить дистанцию начала бега */
+	FORCEINLINE float GetRunToTargetDistance() const { return RunToTargetDistance; }
+
+	/** Получить дистанцию остановки бега */
+	FORCEINLINE float GetStopRunDistance() const { return StopRunDistance; }
+
 protected:
 	/** Текущая цель для атаки */
 	UPROPERTY(BlueprintReadOnly, Replicated, Category="AI")
@@ -60,6 +74,14 @@ protected:
 	/** Минимальное время между атаками */
 	UPROPERTY(EditDefaultsOnly, Category="AI|Combat")
 	float AttackCooldown = 1.5f;
+
+	/** Дистанция на которой бот начинает бежать к цели */
+	UPROPERTY(EditDefaultsOnly, Category="AI|Movement")
+	float RunToTargetDistance = 800.f;
+
+	/** Дистанция на которой бот перестает бежать (близко к цели) */
+	UPROPERTY(EditDefaultsOnly, Category="AI|Movement")
+	float StopRunDistance = 200.f;
 
 	/** Время последней атаки */
 	float LastAttackTime = 0.f;
