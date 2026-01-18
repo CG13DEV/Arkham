@@ -44,7 +44,7 @@ struct FAxeAttackData
 
 	/** Урон атаки */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
-	float Damage = 20.f;
+	float Damage = 25.f;
 
 	/** Множитель урона для комбо (увеличивается с каждой атакой) */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly)
@@ -60,7 +60,7 @@ struct FAxeAttackData
 
 	FAxeAttackData()
 		: AttackType(EAxeAttackType::LightStandingRight)
-		, Damage(20.f)
+		, Damage(25.f)
 		, ComboDamageMultiplier(1.0f)
 		, ComboWindowDuration(0.8f)
 	{}

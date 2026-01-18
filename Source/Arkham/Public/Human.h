@@ -173,6 +173,9 @@ protected:
 	/** Флаг смерти */
 	bool bIsDead = false;
 
+	/** Флаг проигрывания Death Montage (блокирует поворот для Root Motion) */
+	bool bIsPlayingDeathMontage = false;
+
 	// === Ближний бой (без направлений) ===
 	bool bAttackInputBuffered = false;
 	float LastMeleeAbilityStartTime = -1000.f;
@@ -196,6 +199,10 @@ protected:
 
 	/** Вызывается GA_MeleeAttack при завершении монтажа (для обработки буфера ввода) */
 	void OnMeleeAttackAbilityEnded();
+	
+	/** Вызывается при BlendOut Death Montage для включения ragdoll */
+	void OnDeathMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
+
 	friend class UGA_MeleeAttack;
 
 private:

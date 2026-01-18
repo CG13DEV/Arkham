@@ -97,6 +97,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category="TargetLock")
 	float MaxLockBreakDistance;
 
+	/** Минимальная дистанция - ближе этого таргет ВСЕГДА работает (игнорирует углы) */
+	UPROPERTY(EditDefaultsOnly, Category="TargetLock")
+	float MinLockDistance;
+
 	/** Угол конуса для поиска целей (градусы) */
 	UPROPERTY(EditDefaultsOnly, Category="TargetLock")
 	float LockAngle;

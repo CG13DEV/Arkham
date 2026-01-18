@@ -5,8 +5,9 @@
 UHumanAttributeSet::UHumanAttributeSet()
 {
 	// Инициализация начальных значений
-	InitHealth(100.f);
-	InitMaxHealth(100.f);
+	// БАЛАНС: 40 HP для 2-ударных убийств
+	InitHealth(40.f);
+	InitMaxHealth(40.f);
 }
 
 void UHumanAttributeSet::OnRep_MoveSpeed(const FGameplayAttributeData& OldValue)

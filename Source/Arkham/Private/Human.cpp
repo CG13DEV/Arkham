@@ -5,6 +5,8 @@
 #include "GameplayTagsManager.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "AIController.h"
+#include "Net/UnrealNetwork.h"
 
 #include "HumanAttributeSet.h"
 
@@ -80,9 +82,14 @@ void AHuman::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	
-	// Не обновляем поворот если мертвы
-	if (bIsDead)
+	// Не обновляем поворот если мертвы или играется Death Montage (Root Motion)
+	if (bIsDead || bIsPlayingDeathMontage)
 	{
+		// Лог для отладки
+		if (bIsPlayingDeathMontage)
+		{
+			UE_LOG(LogTemp, VeryVerbose, TEXT("Tick: Rotation blocked - Death Montage playing"));
+		}
 		return;
 	}
 	
@@ -244,6 +251,17 @@ void AHuman::UpdateRotation(float DeltaTime)
 		return;
 	}
 
+	// ВАЖНО: Для ботов - не поворачиваем если стоим без движения и без Target Lock
+	// Это позволяет боту сохранять начальную ротацию на уровне пока не увидит игрока
+	if (Cast<AAIController>(Controller))
+	{
+		if (!bIsMoving && !IsTargetLocked())
+		{
+			// Бот стоит без цели - сохраняем текущую ротацию
+			return;
+		}
+	}
+
 	if (!Controller)
 		return;
 
@@ -368,13 +386,23 @@ void AHuman::PerformMeleeAttack()
 void AHuman::RequestMeleeAttack()
 {
 	if (!AbilitySystem || bIsDead)
+	{
+		UE_LOG(LogTemp, Log, TEXT("RequestMeleeAttack: Blocked - Dead: %s"), bIsDead ? TEXT("YES") : TEXT("NO"));
 		return;
+	}
 
 	const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
 
 	// Если уже атакуем — буферизуем (как в Thug), но только спустя небольшой порог времени
 	if (AbilitySystem->HasMatchingGameplayTag(Tag_State_Attacking))
 	{
+		// ВАЖНО: Не буферизуем если мертвы
+		if (bIsDead)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Dead - not buffering"));
+			return;
+		}
+
 		float TimeSinceStart = Now - LastMeleeAbilityStartTime;
 		
 		UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Already attacking! Time since start: %.3f, MinBuffer: %.3f"), 
@@ -524,7 +552,15 @@ void AHuman::OnMeleeAttackAbilityEnded()
 		bAttackInputBuffered ? TEXT("TRUE") : TEXT("FALSE"));
 
 	if (!AbilitySystem || bIsDead)
+	{
+		// Очищаем буфер если мертвы
+		if (bIsDead && bAttackInputBuffered)
+		{
+			bAttackInputBuffered = false;
+			UE_LOG(LogTemp, Warning, TEXT("OnMeleeAttackAbilityEnded: Dead - cleared attack buffer"));
+		}
 		return;
+	}
 
 	if (!bAttackInputBuffered)
 		return;
@@ -557,16 +593,18 @@ void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
 			UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 			if (AnimInstance)
 			{
+				// ВАЖНО: Если HitReaction уже играет - прерываем его и запускаем заново
+				// Это позволяет показать реакцию на каждый удар
 				if (AnimInstance->Montage_IsPlaying(HitReactionMontage))
 				{
-					UE_LOG(LogTemp, Log, TEXT("🤕 OnHealthChanged: HitReaction already playing - skipping"));
+					UE_LOG(LogTemp, Log, TEXT("🤕 OnHealthChanged: Interrupting current HitReaction"));
+					AnimInstance->Montage_Stop(0.1f, HitReactionMontage); // Быстрый blend out за 0.1 сек
 				}
-				else
-				{
-					AnimInstance->Montage_Play(HitReactionMontage);
-					UE_LOG(LogTemp, Warning, TEXT("🤕 OnHealthChanged: Playing HitReaction montage '%s'"), 
-						*HitReactionMontage->GetName());
-				}
+				
+				// Запускаем HitReaction монтаж
+				AnimInstance->Montage_Play(HitReactionMontage);
+				UE_LOG(LogTemp, Warning, TEXT("🤕 OnHealthChanged: Playing HitReaction montage '%s' (Damage: %.1f)"), 
+					*HitReactionMontage->GetName(), -Delta);
 			}
 			else
 			{
@@ -604,6 +642,10 @@ void AHuman::HandleDeath()
 
 	bIsDead = true;
 
+	// ВАЖНО: Очищаем буфер атаки чтобы не было атак после смерти
+	bAttackInputBuffered = false;
+	UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Attack buffer CLEARED"));
+
 	StopMeleeTrace();
 
 	UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: %s is DEAD!"), *GetName());
@@ -639,7 +681,12 @@ void AHuman::HandleDeath()
 	{
 		Movement->DisableMovement();
 		Movement->StopMovementImmediately();
-		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled movement"));
+		
+		// ВАЖНО: Отключаем автоматический поворот для сохранения Root Motion
+		Movement->bOrientRotationToMovement = false;
+		Movement->bUseControllerDesiredRotation = false;
+		
+		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled movement and auto-rotation"));
 	}
 
 	// Отключаем инпут
@@ -648,26 +695,60 @@ void AHuman::HandleDeath()
 	// Проигрываем анимацию смерти (если есть)
 	if (DeathMontage)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: DeathMontage found: %s"), *DeathMontage->GetName());
+		
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 		if (AnimInstance)
 		{
-			AnimInstance->Montage_Play(DeathMontage);
+			UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: AnimInstance is valid"));
 			
-			// Включаем рэгдолл после завершения анимации
-			FTimerHandle DeathTimerHandle;
-			GetWorldTimerManager().SetTimer(DeathTimerHandle, this, &AHuman::EnableRagdoll, 
-				DeathMontage->GetPlayLength(), false);
-			return;
+			// ВАЖНО: Блокируем поворот для Root Motion анимации
+			bIsPlayingDeathMontage = true;
+			
+			// Запускаем монтаж СНАЧАЛА
+			float PlayLength = AnimInstance->Montage_Play(DeathMontage);
+			
+			if (PlayLength > 0.f)
+			{
+				// Настраиваем callback на BlendOut (начало возврата в idle)
+				// ВАЖНО: SetBlendingOutDelegate нужно вызывать ПОСЛЕ Montage_Play!
+				FOnMontageBlendingOutStarted BlendOutDelegate;
+				BlendOutDelegate.BindUObject(this, &AHuman::OnDeathMontageBlendingOut);
+				AnimInstance->Montage_SetBlendingOutDelegate(BlendOutDelegate, DeathMontage);
+				
+				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Montage started (%.2f sec), BlendOut delegate SET"), PlayLength);
+				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Playing death montage '%s' - rotation BLOCKED"), 
+					*DeathMontage->GetName());
+				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Ragdoll will activate on BlendOut - WAITING..."));
+				return;
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("❌ HandleDeath: Montage_Play failed (returned 0)! Enabling ragdoll immediately"));
+				bIsPlayingDeathMontage = false;
+			}
 		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("❌ HandleDeath: AnimInstance is NULL!"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: No DeathMontage set in Blueprint"));
 	}
 
 	// Если нет анимации смерти - сразу включаем рэгдолл
+	UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: No DeathMontage - enabling ragdoll immediately"));
 	EnableRagdoll();
 }
 
 void AHuman::EnableRagdoll()
 {
 	UE_LOG(LogTemp, Warning, TEXT("AHuman::EnableRagdoll - Enabling ragdoll physics"));
+
+	// Сбрасываем флаг проигрывания Death Montage
+	bIsPlayingDeathMontage = false;
 
 	// Отключаем капсулу коллизии
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
@@ -686,3 +767,13 @@ void AHuman::EnableRagdoll()
 		GetCharacterMovement()->StopMovementImmediately();
 	}
 }
+
+void AHuman::OnDeathMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
+{
+	UE_LOG(LogTemp, Warning, TEXT("🎬 OnDeathMontageBlendingOut: BlendOut started (Interrupted: %s)"), 
+		bInterrupted ? TEXT("YES") : TEXT("NO"));
+	
+	// Включаем ragdoll когда начинается BlendOut анимации смерти
+	EnableRagdoll();
+}
+

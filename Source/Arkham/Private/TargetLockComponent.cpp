@@ -13,6 +13,7 @@ UTargetLockComponent::UTargetLockComponent()
 	// Значения по умолчанию
 	MaxLockDistance = 1000.f;
 	MaxLockBreakDistance = 1500.f;
+	MinLockDistance = 300.f; // Ближе 3 метров - таргет всегда работает
 	LockAngle = 60.f;
 	RotationSpeed = 720.f;
 	TargetHeightOffset = 80.f;
@@ -56,6 +57,13 @@ void UTargetLockComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		if (!IsTargetValid(CurrentTarget))
 		{
 			DisableTargetLock();
+			return;
+		}
+
+		// ВАЖНО: НЕ поворачиваем если персонаж мертв или играется Death Montage (Root Motion)
+		if (OwnerHuman->IsDead())
+		{
+			DisableTargetLock(); // Сбрасываем таргет при смерти
 			return;
 		}
 
@@ -295,12 +303,30 @@ bool UTargetLockComponent::IsTargetValid(AActor* Target) const
 	// Проверяем что цель жива
 	AHuman* TargetHuman = Cast<AHuman>(Target);
 	if (!TargetHuman || TargetHuman->IsDead())
+	{
+		UE_LOG(LogTemp, Log, TEXT("TargetLock: Target %s is DEAD or not Human - invalid"), *Target->GetName());
 		return false;
+	}
 
-	// Проверяем дистанцию (с гистерезисом)
+	// Проверяем дистанцию
 	float Distance = FVector::Dist(OwnerHuman->GetActorLocation(), Target->GetActorLocation());
+	
+	// ВАЖНО: Если цель очень близко (ближе MinLockDistance) - таргет ВСЕГДА валиден
+	// Это решает проблему потери таргета в ближнем бою
+	if (Distance <= MinLockDistance)
+	{
+		UE_LOG(LogTemp, Log, TEXT("TargetLock: Target %s is CLOSE (%.1f <= %.1f) - always valid"), 
+			*Target->GetName(), Distance, MinLockDistance);
+		return true;
+	}
+	
+	// На средней/дальней дистанции проверяем MaxLockBreakDistance
 	if (Distance > MaxLockBreakDistance)
+	{
+		UE_LOG(LogTemp, Log, TEXT("TargetLock: Target %s is TOO FAR (%.1f > %.1f) - invalid"), 
+			*Target->GetName(), Distance, MaxLockBreakDistance);
 		return false;
+	}
 
 	return true;
 }
