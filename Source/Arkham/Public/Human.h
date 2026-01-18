@@ -12,6 +12,7 @@ class UGameplayEffect;
 class UGameplayAbility;
 class UMeleeTraceComponent;
 class UTargetLockComponent;
+class UMotionWarpingComponent;
 
 UCLASS()
 class AHuman : public ACharacter, public IAbilitySystemInterface
@@ -66,22 +67,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void RequestMeleeAttack();
 
-	/**
-	 * Эти функции вызываются из Montage Notify / NotifyState.
-	 * Внутри они запускают/останавливают активный MeleeTraceComponent (оружие или кулак).
-	 */
+	/** Вызывается из Montage Notify / NotifyState для запуска/остановки трейса */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void StartMeleeTrace();
 
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void StopMeleeTrace();
 
+	/** Установить урон для следующей атаки (вызывается из абилки перед анимацией) */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void SetNextAttackDamage(float Damage);
+
 	/**
-	 * При экипировке мили-оружия — передай сюда актор оружия.
+	/** При экипировке мили-оружия — передай сюда актор оружия.
 	 * Мы возьмём у него UMeleeTraceComponent и будем использовать его вместо Unarmed.
 	 */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void SetMeleeTraceSourceActor(AActor* InSourceActor);
+
+	/** Motion Warping для атак - подстраивает позицию к цели */
+	UFUNCTION(BlueprintCallable, Category="Combat")
+	void WarpAttack(float Radius, float Distance);
 
 protected:
 	virtual void BeginPlay() override;
@@ -99,6 +105,10 @@ protected:
 	// --- Target Lock ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat")
 	TObjectPtr<UTargetLockComponent> TargetLockComponent;
+
+	// --- Motion Warping ---
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Combat")
+	TObjectPtr<UMotionWarpingComponent> MotionWarping;
 
 	UPROPERTY(EditDefaultsOnly, Category="GAS")
 	TArray<TSubclassOf<UGameplayAbility>> DefaultAbilities;
@@ -166,6 +176,7 @@ protected:
 	// === Ближний бой (без направлений) ===
 	bool bAttackInputBuffered = false;
 	float LastMeleeAbilityStartTime = -1000.f;
+	float CurrentAttackDamage = 0.f;
 
 	/** Через сколько секунд после старта атаки разрешаем буфер (чтобы не словить двойной триггер на один клик) */
 	UPROPERTY(EditDefaultsOnly, Category="Combat")

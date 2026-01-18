@@ -18,6 +18,7 @@ public class Arkham : ModuleRules
 			"GameplayAbilities", 
 			"GameplayTags", 
 			"GameplayTasks",
+			"MotionWarping",
 			"AIModule",
 			"NavigationSystem",
 			"StateTreeModule"

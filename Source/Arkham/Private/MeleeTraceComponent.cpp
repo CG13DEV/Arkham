@@ -2,7 +2,9 @@
 
 #include "AbilitySystemBlueprintLibrary.h"
 #include "AbilitySystemComponent.h"
+#include "AbilitySystemInterface.h"
 #include "GameplayEffect.h"
+#include "GameplayTagsManager.h"
 #include "DrawDebugHelpers.h"
 #include "TimerManager.h"
 
@@ -48,15 +50,27 @@ void UMeleeTraceComponent::SetTraceMesh(USkeletalMeshComponent* InMesh)
 void UMeleeTraceComponent::StartTrace(UAbilitySystemComponent* InSourceASC, UObject* InSourceObject)
 {
 	if (!GetWorld() || !GetOwner())
+	{
+		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: StartTrace failed - World or Owner is NULL"));
 		return;
+	}
 
 	// Уже трейсим — перезапуск
-	StopTrace();
+	if (bTracing)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MeleeTrace: Restarting trace (was already tracing)"));
+		StopTrace();
+	}
 
 	SourceASC = InSourceASC;
 	SourceObject = InSourceObject;
 	HitActors.Reset();
 	bTracing = true;
+
+	UE_LOG(LogTemp, Warning, TEXT("🎯 MeleeTrace: StartTrace | Damage: %.1f | Sockets: %d | Interval: %.3f"), 
+		DamageForNextTrace > 0.f ? DamageForNextTrace : BaseDamage, 
+		TraceSockets.Num(), 
+		TraceInterval);
 
 	CacheInitialSocketPositions();
 
@@ -72,6 +86,7 @@ void UMeleeTraceComponent::StartTrace(UAbilitySystemComponent* InSourceASC, UObj
 void UMeleeTraceComponent::StopTrace()
 {
 	bTracing = false;
+	DamageForNextTrace = 0.f;
 	HitActors.Reset();
 	LastSocketPositions.Reset();
 
@@ -103,6 +118,21 @@ void UMeleeTraceComponent::TickTrace()
 	// Урон только на сервере
 	if (!GetOwner()->HasAuthority())
 		return;
+
+	// ВАЖНО: Не наносим урон если атакующий мертв
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (IAbilitySystemInterface* ASI = Cast<IAbilitySystemInterface>(Character))
+		{
+			UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
+			if (ASC && ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(TEXT("State.Dead"))))
+			{
+				UE_LOG(LogTemp, Log, TEXT("⚪ MeleeTrace: Owner is dead - stopping trace"));
+				StopTrace();
+				return;
+			}
+		}
+	}
 
 	if (!TraceMesh || TraceSockets.Num() == 0)
 		return;
@@ -143,6 +173,10 @@ void UMeleeTraceComponent::TickTrace()
 		if (!bHit)
 			continue;
 
+		// Логируем попадание
+		UE_LOG(LogTemp, Log, TEXT("🎯 MeleeTrace: Hit detected! Socket: %s, Hits: %d"), 
+			*SocketName.ToString(), Hits.Num());
+
 		for (const FHitResult& Hit : Hits)
 		{
 			AActor* HitActor = Hit.GetActor();
@@ -150,8 +184,12 @@ void UMeleeTraceComponent::TickTrace()
 				continue;
 
 			if (!bAllowMultipleHitsPerActor && HitActors.Contains(HitActor))
+			{
+				UE_LOG(LogTemp, Log, TEXT("⚪ MeleeTrace: %s already hit - skipping"), *HitActor->GetName());
 				continue;
+			}
 
+			UE_LOG(LogTemp, Warning, TEXT("✅ MeleeTrace: NEW HIT on %s!"), *HitActor->GetName());
 			HitActors.Add(HitActor);
 			ApplyDamageToTarget(HitActor, Hit);
 		}
@@ -160,13 +198,26 @@ void UMeleeTraceComponent::TickTrace()
 
 void UMeleeTraceComponent::ApplyDamageToTarget(AActor* TargetActor, const FHitResult& Hit)
 {
+	if (!TargetActor)
+	{
+		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: ApplyDamageToTarget - TargetActor is NULL!"));
+		return;
+	}
+
 	UAbilitySystemComponent* LocalSourceASC = SourceASC.Get();
 	if (!LocalSourceASC)
+	{
+		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: ApplyDamageToTarget - SourceASC is NULL!"));
 		return;
+	}
 
 	UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
 	if (!TargetASC)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MeleeTrace: Target '%s' has no AbilitySystemComponent - skipping damage"), 
+			*TargetActor->GetName());
 		return;
+	}
 
 	if (DamageEffectClass)
 	{
@@ -178,6 +229,7 @@ void UMeleeTraceComponent::ApplyDamageToTarget(AActor* TargetActor, const FHitRe
 		if (SpecHandle.IsValid())
 		{
 			LocalSourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
+			UE_LOG(LogTemp, Warning, TEXT("💥 MeleeTrace: Applied DamageEffectClass to %s"), *TargetActor->GetName());
 		}
 		return;
 	}
@@ -190,12 +242,20 @@ void UMeleeTraceComponent::ApplyDamageToTarget(AActor* TargetActor, const FHitRe
 	UGameplayEffect* DamageGE = NewObject<UGameplayEffect>(GetTransientPackage(), TEXT("GE_MeleeDamage_Runtime"));
 	DamageGE->DurationPolicy = EGameplayEffectDurationType::Instant;
 
+	// Используем DamageForNextTrace если установлен, иначе BaseDamage
+	float FinalDamage = (DamageForNextTrace > 0.f) ? DamageForNextTrace : BaseDamage;
+
 	FGameplayModifierInfo ModInfo;
 	ModInfo.Attribute = UHumanAttributeSet::GetDamageAttribute();
 	ModInfo.ModifierOp = EGameplayModOp::Additive;
-	ModInfo.ModifierMagnitude = FScalableFloat(BaseDamage);
+	ModInfo.ModifierMagnitude = FScalableFloat(FinalDamage);
 	DamageGE->Modifiers.Add(ModInfo);
 
 	FGameplayEffectSpec Spec(DamageGE, Ctx, 1.0f);
 	TargetASC->ApplyGameplayEffectSpecToSelf(Spec);
+
+	UE_LOG(LogTemp, Warning, TEXT("💥 MeleeTrace: Applied %.1f damage to %s (Source: %s)"), 
+		FinalDamage, 
+		*TargetActor->GetName(),
+		SourceObject.IsValid() ? *SourceObject->GetName() : TEXT("NULL"));
 }

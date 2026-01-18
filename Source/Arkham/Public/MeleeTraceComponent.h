@@ -23,6 +23,9 @@ public:
 	void StopTrace();
 
 	UFUNCTION(BlueprintCallable, Category="Combat|Melee")
+	void SetDamageForNextTrace(float InDamage) { DamageForNextTrace = InDamage; }
+
+	UFUNCTION(BlueprintCallable, Category="Combat|Melee")
 	bool IsTracing() const { return bTracing; }
 
 	UFUNCTION(BlueprintCallable, Category="Combat|Melee")
@@ -67,6 +70,7 @@ public:
 
 private:
 	bool bTracing = false;
+	float DamageForNextTrace = 0.f;
 	TWeakObjectPtr<UAbilitySystemComponent> SourceASC;
 	TWeakObjectPtr<UObject> SourceObject;
 	TArray<FVector> LastSocketPositions;

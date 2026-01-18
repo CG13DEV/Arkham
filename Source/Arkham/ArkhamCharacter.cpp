@@ -83,6 +83,12 @@ void AArkhamCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// ВАЖНО: Проверка контроллера в начале функции
+	if (!GetController())
+	{
+		return;
+	}
+
 	// В режиме Look не обновляем позицию камеры
 	if (bIsLookMode)
 	{

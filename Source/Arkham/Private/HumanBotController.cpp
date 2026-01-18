@@ -51,7 +51,7 @@ void AHumanBotController::OnPossess(APawn* InPawn)
 void AHumanBotController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	UE_LOG(LogTemp, Warning, TEXT("AHumanBotController: %s tick"), *GetName());
+	
 	AHumanBot* Bot = Cast<AHumanBot>(GetPawn());
 	if (!Bot || Bot->IsDead())
 		return;
@@ -103,7 +103,6 @@ void AHumanBotController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulu
 	{
 		// Обнаружили цель
 		Bot->SetTarget(Actor);
-		UE_LOG(LogTemp, Warning, TEXT("HumanBotController: Detected target: %s"), *Actor->GetName());
 	}
 	else
 	{
@@ -111,7 +110,6 @@ void AHumanBotController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulu
 		if (Bot->GetCurrentTarget() == Actor)
 		{
 			Bot->ClearTarget();
-			UE_LOG(LogTemp, Warning, TEXT("HumanBotController: Lost target: %s"), *Actor->GetName());
 		}
 	}
 }

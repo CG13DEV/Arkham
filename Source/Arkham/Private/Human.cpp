@@ -10,6 +10,7 @@
 
 #include "MeleeTraceComponent.h"
 #include "TargetLockComponent.h"
+#include "MotionWarpingComponent.h"
 
 // Forward declaration для проверки типа
 class AHumanBot;
@@ -28,6 +29,9 @@ AHuman::AHuman()
 
 	// Target Lock компонент
 	TargetLockComponent = CreateDefaultSubobject<UTargetLockComponent>(TEXT("TargetLock"));
+
+	// Motion Warping компонент для подстройки позиции при атаках
+	MotionWarping = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarping"));
 
 	// Персонаж НЕ поворачивается автоматически от контроллера
 	bUseControllerRotationPitch = false;
@@ -75,7 +79,13 @@ void AHuman::BeginPlay()
 void AHuman::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	
+	// Не обновляем поворот если мертвы
+	if (bIsDead)
+	{
+		return;
+	}
+	
 	// Обновляем поворот персонажа и DirectionView
 	UpdateRotation(DeltaTime);
 }
@@ -365,13 +375,26 @@ void AHuman::RequestMeleeAttack()
 	// Если уже атакуем — буферизуем (как в Thug), но только спустя небольшой порог времени
 	if (AbilitySystem->HasMatchingGameplayTag(Tag_State_Attacking))
 	{
-		if ((Now - LastMeleeAbilityStartTime) >= MinAttackTimeBeforeBuffer)
+		float TimeSinceStart = Now - LastMeleeAbilityStartTime;
+		
+		UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Already attacking! Time since start: %.3f, MinBuffer: %.3f"), 
+			TimeSinceStart, MinAttackTimeBeforeBuffer);
+		
+		if (TimeSinceStart >= MinAttackTimeBeforeBuffer)
 		{
 			bAttackInputBuffered = true;
+			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: INPUT BUFFERED!"));
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Too early for buffer (anti-double-click)"));
 		}
 		return;
 	}
 
+	UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Starting new attack (buffer was: %s)"), 
+		bAttackInputBuffered ? TEXT("TRUE") : TEXT("FALSE"));
+	
 	bAttackInputBuffered = false;
 	LastMeleeAbilityStartTime = Now;
 	PerformMeleeAttack();
@@ -387,16 +410,38 @@ UMeleeTraceComponent* AHuman::ResolveMeleeTraceComponent() const
 void AHuman::StartMeleeTrace()
 {
 	if (!AbilitySystem || bIsDead)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("⚠️ StartMeleeTrace: Blocked (ASC: %s, Dead: %s)"), 
+			AbilitySystem ? TEXT("Valid") : TEXT("NULL"), bIsDead ? TEXT("YES") : TEXT("NO"));
 		return;
+	}
 
 	if (UMeleeTraceComponent* Tracer = ResolveMeleeTraceComponent())
 	{
+		// Устанавливаем урон перед стартом трейса
+		if (CurrentAttackDamage > 0.f)
+		{
+			Tracer->SetDamageForNextTrace(CurrentAttackDamage);
+			UE_LOG(LogTemp, Warning, TEXT("⚔️ StartMeleeTrace: Damage set to %.1f"), CurrentAttackDamage);
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("⚠️ StartMeleeTrace: No damage set! Using BaseDamage from component"));
+		}
+		
 		Tracer->StartTrace(AbilitySystem, this);
+		UE_LOG(LogTemp, Warning, TEXT("✅ StartMeleeTrace: Trace started!"));
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("❌ StartMeleeTrace: MeleeTraceComponent is NULL!"));
 	}
 }
 
 void AHuman::StopMeleeTrace()
 {
+	UE_LOG(LogTemp, Warning, TEXT("🛑 StopMeleeTrace: Called"));
+	
 	// Безопасно стопаем оба, на случай переключения источника во время окна
 	if (UnarmedMeleeTrace)
 	{
@@ -406,6 +451,15 @@ void AHuman::StopMeleeTrace()
 	{
 		ActiveWeaponMeleeTrace->StopTrace();
 	}
+	
+	// Сбрасываем урон после завершения атаки
+	CurrentAttackDamage = 0.f;
+}
+
+void AHuman::SetNextAttackDamage(float Damage)
+{
+	CurrentAttackDamage = Damage;
+	UE_LOG(LogTemp, Log, TEXT("AHuman::SetNextAttackDamage - Set to %.1f"), Damage);
 }
 
 void AHuman::SetMeleeTraceSourceActor(AActor* InSourceActor)
@@ -419,9 +473,55 @@ void AHuman::SetMeleeTraceSourceActor(AActor* InSourceActor)
 	}
 }
 
+void AHuman::WarpAttack(float Radius, float Distance)
+{
+	if (!MotionWarping)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("WarpAttack: MotionWarping component is NULL!"));
+		return;
+	}
+
+	// Получаем цель из Target Lock
+	AActor* Target = GetLockedTarget();
+
+	// Если нет цели или цель слишком далеко - удаляем warp target
+	if (!Target || (GetActorLocation() - Target->GetActorLocation()).Size() > Radius)
+	{
+		MotionWarping->RemoveWarpTarget(FName("Attack"));
+		return;
+	}
+
+	// Ищем существующий warp target
+	MotionWarping->FindWarpTarget(FName("Attack"));
+
+	// Вычисляем позицию цели (головы на уровне персонажа)
+	FVector TargetHead = Target->GetActorLocation() + FVector(0.f, 0.f, 80.f); // Примерная высота головы
+	TargetHead.Z = GetActorLocation().Z; // Выравниваем по высоте персонажа
+
+	// Вычисляем позицию для варпа - на расстоянии Distance от цели
+	FVector WarpLocation = (GetActorLocation() - TargetHead).GetSafeNormal() * Distance + TargetHead;
+
+	// Направление к цели
+	FVector DirectionToTarget = (TargetHead - GetActorLocation()).GetSafeNormal();
+
+	// Создаем и обновляем warp target
+	FMotionWarpingTarget WarpTarget;
+	WarpTarget.Name = FName(TEXT("Attack"));
+	WarpTarget.Location = WarpLocation;
+	WarpTarget.Rotation = (Target->GetActorLocation() - GetActorLocation()).Rotation();
+	
+	MotionWarping->AddOrUpdateWarpTarget(WarpTarget);
+
+	UE_LOG(LogTemp, Log, TEXT("WarpAttack: Set warp target at distance %.1f from %s"), 
+		Distance, *Target->GetName());
+}
+
 void AHuman::OnMeleeAttackAbilityEnded()
 {
 	StopMeleeTrace();
+
+	UE_LOG(LogTemp, Log, TEXT("OnMeleeAttackAbilityEnded: Called (BufferFlag: %s)"), 
+		bAttackInputBuffered ? TEXT("TRUE") : TEXT("FALSE"));
 
 	if (!AbilitySystem || bIsDead)
 		return;
@@ -431,9 +531,12 @@ void AHuman::OnMeleeAttackAbilityEnded()
 
 	bAttackInputBuffered = false;
 
+	UE_LOG(LogTemp, Warning, TEXT("OnMeleeAttackAbilityEnded: Scheduling next attack on next tick!"));
+
 	// Запускаем следующую атаку на следующий тик, чтобы тег State.Combat.Attacking успел сняться
 	GetWorldTimerManager().SetTimerForNextTick([this]()
 	{
+		UE_LOG(LogTemp, Warning, TEXT("NextTick: Executing buffered attack!"));
 		RequestMeleeAttack();
 	});
 }
@@ -442,7 +545,7 @@ void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
 {
 	const float Delta = Data.NewValue - Data.OldValue;
 	
-	UE_LOG(LogTemp, Warning, TEXT("AHuman::OnHealthChanged - Health: %.1f -> %.1f (Delta: %.1f)"), 
+	UE_LOG(LogTemp, Warning, TEXT("AHuman::OnHealthChanged - Health: %.1f -> %.1f (Delta: %.1f)"),
 		Data.OldValue, Data.NewValue, Delta);
 
 	// Если получили урон (здоровье уменьшилось)
@@ -452,10 +555,27 @@ void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
 		if (HitReactionMontage)
 		{
 			UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
-			if (AnimInstance && !AnimInstance->Montage_IsPlaying(HitReactionMontage))
+			if (AnimInstance)
 			{
-				AnimInstance->Montage_Play(HitReactionMontage);
+				if (AnimInstance->Montage_IsPlaying(HitReactionMontage))
+				{
+					UE_LOG(LogTemp, Log, TEXT("🤕 OnHealthChanged: HitReaction already playing - skipping"));
+				}
+				else
+				{
+					AnimInstance->Montage_Play(HitReactionMontage);
+					UE_LOG(LogTemp, Warning, TEXT("🤕 OnHealthChanged: Playing HitReaction montage '%s'"), 
+						*HitReactionMontage->GetName());
+				}
 			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("❌ OnHealthChanged: AnimInstance is NULL!"));
+			}
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("⚠️ OnHealthChanged: No HitReactionMontage set in Blueprint!"));
 		}
 
 		// Проверяем смерть
@@ -477,13 +597,16 @@ void AHuman::OnDeathTagAdded(const FGameplayTag Tag, int32 NewCount)
 void AHuman::HandleDeath()
 {
 	if (bIsDead)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: Already dead - ignoring"));
 		return;
+	}
 
 	bIsDead = true;
 
 	StopMeleeTrace();
 
-	UE_LOG(LogTemp, Warning, TEXT("AHuman::HandleDeath - Character is now dead!"));
+	UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: %s is DEAD!"), *GetName());
 
 	// Добавляем тег смерти
 	if (AbilitySystem)
@@ -494,13 +617,33 @@ void AHuman::HandleDeath()
 
 		// Отменяем все активные способности
 		AbilitySystem->CancelAllAbilities();
+		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Cancelled all abilities"));
 	}
 
 	// Отключаем контроллер (опционально)
 	if (Controller)
 	{
 		Controller->UnPossess();
+		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Unpossessed controller"));
 	}
+
+	// ВАЖНО: Отключаем коллизию капсулы чтобы боты перестали атаковать
+	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled capsule collision"));
+	}
+
+	// Отключаем движение
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->DisableMovement();
+		Movement->StopMovementImmediately();
+		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled movement"));
+	}
+
+	// Отключаем инпут
+	DisableInput(Cast<APlayerController>(Controller));
 
 	// Проигрываем анимацию смерти (если есть)
 	if (DeathMontage)
