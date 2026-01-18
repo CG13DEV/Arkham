@@ -7,7 +7,8 @@
 
 AHumanBot::AHumanBot()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	// ВАЖНО: Включаем Tick для бота (для UpdateRotation и других систем)
+	PrimaryActorTick.bCanEverTick = true;
 
 	// Устанавливаем AI Controller класс
 	AIControllerClass = AHumanBotController::StaticClass();
@@ -19,8 +20,11 @@ AHumanBot::AHumanBot()
 void AHumanBot::BeginPlay()
 {
 	Super::BeginPlay();
+}
 
-	UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s spawned and ready"), *GetName());
+void AHumanBot::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
 }
 
 void AHumanBot::SetTarget(AActor* NewTarget)

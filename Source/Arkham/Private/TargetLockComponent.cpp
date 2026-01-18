@@ -302,15 +302,16 @@ bool UTargetLockComponent::IsTargetValid(AActor* Target) const
 	if (Distance > MaxLockBreakDistance)
 		return false;
 
-	// Можно добавить проверку видимости через line trace
-	// TODO: Line of Sight check
-
 	return true;
 }
 
 void UTargetLockComponent::UpdateRotationToTarget(float DeltaTime)
 {
 	if (!CurrentTarget || !OwnerHuman)
+		return;
+
+	// ВАЖНО: При беге НЕ управляем поворотом! Human.cpp сам поворачивает по направлению движения
+	if (OwnerHuman->IsRunning())
 		return;
 
 	// Получаем направление к цели (с учетом высоты offset)
@@ -331,24 +332,6 @@ void UTargetLockComponent::UpdateRotationToTarget(float DeltaTime)
 	NewRotation.Roll = 0.f;
 
 	OwnerHuman->SetActorRotation(NewRotation);
-
-	// Также обновляем контроллер чтобы камера смотрела на цель
-	if (OwnerHuman->GetController())
-	{
-		FRotator ControlRotation = OwnerHuman->GetController()->GetControlRotation();
-		FRotator TargetControlRotation = (TargetLocation - OwnerLocation).Rotation();
-		
-		// Интерполируем только Yaw, Pitch оставляем игроку
-		FRotator NewControlRotation = ControlRotation;
-		NewControlRotation.Yaw = FMath::RInterpTo(
-			FRotator(0, ControlRotation.Yaw, 0),
-			FRotator(0, TargetControlRotation.Yaw, 0),
-			DeltaTime,
-			RotationSpeed / 180.f
-		).Yaw;
-
-		// OwnerHuman->GetController()->SetControlRotation(NewControlRotation);
-	}
 }
 
 void UTargetLockComponent::CheckAutoLock()
@@ -422,8 +405,6 @@ void UTargetLockComponent::CheckAutoLock()
 	{
 		CurrentTarget = ClosestEnemy;
 		bIsLocked = true;
-		UE_LOG(LogTemp, Warning, TEXT("TargetLock: AUTO-LOCKED on %s (distance: %.0f)"), 
-			*CurrentTarget->GetName(), MinDistance);
 	}
 }
 

@@ -51,7 +51,7 @@ void AHumanBotController::OnPossess(APawn* InPawn)
 void AHumanBotController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	UE_LOG(LogTemp, Warning, TEXT("AHumanBotController: %s tick"), *GetName());
 	AHumanBot* Bot = Cast<AHumanBot>(GetPawn());
 	if (!Bot || Bot->IsDead())
 		return;

@@ -11,6 +11,9 @@
 #include "MeleeTraceComponent.h"
 #include "TargetLockComponent.h"
 
+// Forward declaration для проверки типа
+class AHumanBot;
+
 AHuman::AHuman()
 {
 	PrimaryActorTick.bCanEverTick = true; // Включаем Tick для управления поворотом
@@ -60,12 +63,19 @@ void AHuman::BeginPlay()
 {
 	Super::BeginPlay();
 	InitASC();
+
+	// Настраиваем зависимость Tick: Human::Tick должен выполняться ПОСЛЕ TargetLockComponent
+	// Это гарантирует что при беге Human::Tick имеет последнее слово в повороте
+	if (TargetLockComponent)
+	{
+		AddTickPrerequisiteComponent(TargetLockComponent);
+	}
 }
 
 void AHuman::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
+
 	// Обновляем поворот персонажа и DirectionView
 	UpdateRotation(DeltaTime);
 }
@@ -195,43 +205,13 @@ void AHuman::ApplyLocomotionConfig(bool bRunning)
 
 void AHuman::UpdateRotation(float DeltaTime)
 {
-	if (!Controller) return;
-
 	const FRotator CurrentRotation = GetActorRotation();
-	const FRotator ControlRotation = Controller->GetControlRotation();
 	const FVector Velocity = GetVelocity();
 	const float Speed = Velocity.Size2D();
 	const bool bIsMoving = Speed > 1.0f;
 	const bool bRunning = IsRunning();
 
-	// ============================================================
-	// 1. СТОИТ НА МЕСТЕ - только поворачиваем голову (DirectionView)
-	// ============================================================
-	if (!bIsMoving)
-	{
-		// Если есть Target Lock - поворачиваемся к цели
-		if (IsTargetLocked())
-		{
-			DirectionView = 0.f;
-			// TargetLockComponent управляет поворотом в Tick
-			return;
-		}
-
-		// Вычисляем разницу между направлением взгляда и персонажа
-		float DeltaYaw = FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, ControlRotation.Yaw);
-		
-		// Плавная интерполяция DirectionView для анимации головы
-		DirectionView = FMath::FInterpTo(DirectionView, DeltaYaw, DeltaTime, DirectionViewInterpSpeed);
-		
-		// Капсула НЕ поворачивается
-		return;
-	}
-
-	// ============================================================
-	// 2. БЕГ - ВСЕГДА поворачиваемся к направлению движения
-	//    (даже если есть Target Lock!)
-	// ============================================================
-	if (bRunning)
+	if (bRunning || (bIsMoving && !IsTargetLocked()))
 	{
 		// Направление движения
 		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
@@ -242,36 +222,30 @@ void AHuman::UpdateRotation(float DeltaTime)
 		NewRotation.Roll = 0.f;
 		
 		SetActorRotation(NewRotation);
-		
+
 		// DirectionView = 0 при беге (голова смотрит прямо)
 		DirectionView = FMath::FInterpTo(DirectionView, 0.f, DeltaTime, DirectionViewInterpSpeed);
+		return;
 	}
-	// ============================================================
-	// 3. ХОДЬБА - поворот к Target Lock (если есть) или по направлению движения
-	// ============================================================
-	else
-	{
-		// Если активен Target Lock - TargetLockComponent управляет поворотом (STRAFE)
-		if (IsTargetLocked())
-		{
-			DirectionView = 0.f;
-			// TargetLockComponent управляет поворотом в Tick
-			return;
-		}
 
-		// БЕЗ Target Lock - поворачиваемся по направлению движения (как при беге, но медленнее)
-		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
-		
-		// Плавный поворот к направлению движения
-		FRotator NewRotation = FMath::RInterpTo(CurrentRotation, VelocityRotation, DeltaTime, WalkRotationRate / 180.f);
-		NewRotation.Pitch = 0.f;
-		NewRotation.Roll = 0.f;
-		
-		SetActorRotation(NewRotation);
-		
-		// DirectionView = 0 при движении (голова смотрит прямо)
-		DirectionView = FMath::FInterpTo(DirectionView, 0.f, DeltaTime, DirectionViewInterpSpeed);
+	if (bIsMoving && IsTargetLocked())
+	{
+		DirectionView = 0.f;
+		return;
 	}
+
+	if (!Controller)
+		return;
+
+	const FRotator ControlRotation = Controller->GetControlRotation();
+
+	// Вычисляем разницу между направлением взгляда и персонажа
+	float DeltaYaw = FMath::FindDeltaAngleDegrees(CurrentRotation.Yaw, ControlRotation.Yaw);
+	
+	// Плавная интерполяция DirectionView для анимации головы
+	DirectionView = FMath::FInterpTo(DirectionView, DeltaYaw, DeltaTime, DirectionViewInterpSpeed);
+	
+	// Капсула НЕ поворачивается
 }
 
 bool AHuman::IsRunning() const

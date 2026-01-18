@@ -19,6 +19,7 @@ public:
 	AHumanBot();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaTime) override;
 
 	/** Получить текущую цель бота */
 	UFUNCTION(BlueprintCallable, Category="AI")
@@ -77,7 +78,7 @@ protected:
 
 	/** Дистанция на которой бот начинает бежать к цели */
 	UPROPERTY(EditDefaultsOnly, Category="AI|Movement")
-	float RunToTargetDistance = 800.f;
+	float RunToTargetDistance = 300.f;
 
 	/** Дистанция на которой бот перестает бежать (близко к цели) */
 	UPROPERTY(EditDefaultsOnly, Category="AI|Movement")

@@ -232,8 +232,6 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 		
 		// Устанавливаем TargetArmLength на вычисленное расстояние
 		SpringArmMain->TargetArmLength = Distance*1.0f;
-		
-		UE_LOG(LogTemp, Warning, TEXT("*** LOOK MODE ACTIVATED: Distance = %.2f ***"), Distance);
 	}
 	
 	// Применяем вращение камеры
@@ -250,8 +248,6 @@ void AArkhamCharacter::Input_LookReleased()
 	{
 		return;
 	}
-	
-	UE_LOG(LogTemp, Warning, TEXT("*** LOOK MODE DEACTIVATED ***"));
 	
 	// Выходим из режима Look
 	bIsLookMode = false;
