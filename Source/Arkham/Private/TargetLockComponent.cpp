@@ -33,7 +33,7 @@ void UTargetLockComponent::BeginPlay()
 	OwnerHuman = Cast<AHuman>(GetOwner());
 	if (!OwnerHuman)
 	{
-		UE_LOG(LogTemp, Error, TEXT("TargetLockComponent: Owner is not AHuman!"));
+		
 	}
 }
 
@@ -101,7 +101,7 @@ void UTargetLockComponent::EnableTargetLock()
 	AActor* NewTarget = FindClosestTarget();
 	if (!NewTarget)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("TargetLock: No valid targets found"));
+		
 		return;
 	}
 
@@ -109,7 +109,7 @@ void UTargetLockComponent::EnableTargetLock()
 	bIsLocked = true;
 	bManuallyDisabled = false; // Сбрасываем флаг ручного выключения
 
-	UE_LOG(LogTemp, Warning, TEXT("TargetLock: LOCKED on %s"), *CurrentTarget->GetName());
+	
 }
 
 void UTargetLockComponent::DisableTargetLock()
@@ -120,7 +120,7 @@ void UTargetLockComponent::DisableTargetLock()
 	bIsLocked = false;
 	CurrentTarget = nullptr;
 
-	UE_LOG(LogTemp, Warning, TEXT("TargetLock: UNLOCKED"));
+	
 }
 
 void UTargetLockComponent::SwitchTargetRight()
@@ -132,7 +132,7 @@ void UTargetLockComponent::SwitchTargetRight()
 	if (NewTarget && NewTarget != CurrentTarget)
 	{
 		CurrentTarget = NewTarget;
-		UE_LOG(LogTemp, Warning, TEXT("TargetLock: Switched RIGHT to %s"), *CurrentTarget->GetName());
+		
 	}
 }
 
@@ -145,7 +145,7 @@ void UTargetLockComponent::SwitchTargetLeft()
 	if (NewTarget && NewTarget != CurrentTarget)
 	{
 		CurrentTarget = NewTarget;
-		UE_LOG(LogTemp, Warning, TEXT("TargetLock: Switched LEFT to %s"), *CurrentTarget->GetName());
+		
 	}
 }
 
@@ -304,7 +304,7 @@ bool UTargetLockComponent::IsTargetValid(AActor* Target) const
 	AHuman* TargetHuman = Cast<AHuman>(Target);
 	if (!TargetHuman || TargetHuman->IsDead())
 	{
-		UE_LOG(LogTemp, Log, TEXT("TargetLock: Target %s is DEAD or not Human - invalid"), *Target->GetName());
+		
 		return false;
 	}
 

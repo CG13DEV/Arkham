@@ -89,7 +89,7 @@ void AHuman::Tick(float DeltaTime)
 		// Лог для отладки
 		if (bIsPlayingDeathMontage)
 		{
-			UE_LOG(LogTemp, VeryVerbose, TEXT("Tick: Rotation blocked - Death Montage playing"));
+			
 		}
 		return;
 	}
@@ -151,23 +151,23 @@ void AHuman::GiveDefaultAbilities()
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("=== GiveDefaultAbilities: Starting to give %d abilities ==="), DefaultAbilities.Num());
+	
 
 	for (const TSubclassOf<UGameplayAbility>& AbilityClass : DefaultAbilities)
 	{
 		if (!AbilityClass)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("  - Skipping NULL ability class"));
+			
 			continue;
 		}
 		
-		UE_LOG(LogTemp, Warning, TEXT("  - Giving ability: %s"), *AbilityClass->GetName());
+		
 		FGameplayAbilitySpec Spec = FGameplayAbilitySpec(AbilityClass, 1);
 		AbilitySystem->GiveAbility(Spec);
 	}
 
 	bAbilitiesGiven = true;
-	UE_LOG(LogTemp, Warning, TEXT("=== GiveDefaultAbilities: COMPLETE ==="));
+	
 }
 
 void AHuman::ApplyDefaultAttributes()
@@ -241,7 +241,7 @@ void AHuman::UpdateRotation(float DeltaTime)
 		// ВАЖНО: Не поворачиваем по скорости если играется монтаж
 		if (bIsPlayingMontage)
 		{
-			UE_LOG(LogTemp, VeryVerbose, TEXT("UpdateRotation: Montage playing - rotation blocked"));
+			
 			return;
 		}
 		
@@ -310,11 +310,11 @@ AActor* AHuman::GetLockedTarget() const
 
 void AHuman::StartRun()
 {
-	UE_LOG(LogTemp, Warning, TEXT("=== AHuman::StartRun CALLED ==="));
+	
 	
 	if (!AbilitySystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("AHuman::StartRun - AbilitySystem is NULL!"));
+		
 		return;
 	}
 
@@ -332,33 +332,33 @@ void AHuman::StartRun()
 			
 			if (Spec.Ability->AbilityTags.HasTag(Tag_Ability_Run))
 			{
-				UE_LOG(LogTemp, Warning, TEXT("AHuman::StartRun - Found GA_HumanRun! Trying to activate..."));
+				
 				bool bSuccess = AbilitySystem->TryActivateAbility(Spec.Handle);
-				UE_LOG(LogTemp, Warning, TEXT("AHuman::StartRun - Activation result: %s"), bSuccess ? TEXT("SUCCESS") : TEXT("FAILED"));
+				
 				return;
 			}
 		}
 	}
 
-	UE_LOG(LogTemp, Error, TEXT("AHuman::StartRun - Ability.Movement.Run NOT FOUND in abilities!"));
+	
 }
 
 void AHuman::StopRun()
 {
-	UE_LOG(LogTemp, Warning, TEXT("=== AHuman::StopRun CALLED ==="));
+	
 	
 	if (!AbilitySystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("AHuman::StopRun - AbilitySystem is NULL!"));
+		
 		return;
 	}
 
 	FGameplayTagContainer CancelTags;
 	CancelTags.AddTag(Tag_Ability_Run);
 	
-	UE_LOG(LogTemp, Warning, TEXT("AHuman::StopRun - Cancelling abilities with tag: %s"), *Tag_Ability_Run.ToString());
+	
 	AbilitySystem->CancelAbilities(&CancelTags);
-	UE_LOG(LogTemp, Warning, TEXT("AHuman::StopRun - Cancel request sent"));
+	
 }
 
 // === Функции здоровья ===
@@ -377,7 +377,7 @@ void AHuman::Respawn()
 {
 	bIsDead = false;
 	bIsPlayingDeathMontage = false;
-	UE_LOG(LogTemp, Warning, TEXT("🔄 Respawn: %s is now alive! bIsDead reset to FALSE"), *GetName());
+	
 }
 
 void AHuman::PerformMeleeAttack()
@@ -401,7 +401,7 @@ void AHuman::PerformMeleeAttack()
 		}
 	}
 
-	UE_LOG(LogTemp, Error, TEXT("AHuman::PerformMeleeAttack - Ability.Combat.MeleeAttack NOT FOUND!"));
+	
 }
 
 
@@ -409,7 +409,7 @@ void AHuman::RequestMeleeAttack()
 {
 	if (!AbilitySystem || bIsDead)
 	{
-		UE_LOG(LogTemp, Log, TEXT("RequestMeleeAttack: Blocked - Dead: %s"), bIsDead ? TEXT("YES") : TEXT("NO"));
+		
 		return;
 	}
 
@@ -421,7 +421,7 @@ void AHuman::RequestMeleeAttack()
 		// ВАЖНО: Не буферизуем если мертвы
 		if (bIsDead)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Dead - not buffering"));
+			
 			return;
 		}
 
@@ -433,11 +433,11 @@ void AHuman::RequestMeleeAttack()
 		if (TimeSinceStart >= MinAttackTimeBeforeBuffer)
 		{
 			bAttackInputBuffered = true;
-			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: INPUT BUFFERED!"));
+			
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("RequestMeleeAttack: Too early for buffer (anti-double-click)"));
+			
 		}
 		return;
 	}
@@ -472,25 +472,25 @@ void AHuman::StartMeleeTrace()
 		if (CurrentAttackDamage > 0.f)
 		{
 			Tracer->SetDamageForNextTrace(CurrentAttackDamage);
-			UE_LOG(LogTemp, Warning, TEXT("⚔️ StartMeleeTrace: Damage set to %.1f"), CurrentAttackDamage);
+			
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("⚠️ StartMeleeTrace: No damage set! Using BaseDamage from component"));
+			
 		}
 		
 		Tracer->StartTrace(AbilitySystem, this);
-		UE_LOG(LogTemp, Warning, TEXT("✅ StartMeleeTrace: Trace started!"));
+		
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("❌ StartMeleeTrace: MeleeTraceComponent is NULL!"));
+		
 	}
 }
 
 void AHuman::StopMeleeTrace()
 {
-	UE_LOG(LogTemp, Warning, TEXT("🛑 StopMeleeTrace: Called"));
+	
 	
 	// Безопасно стопаем оба, на случай переключения источника во время окна
 	if (UnarmedMeleeTrace)
@@ -509,7 +509,7 @@ void AHuman::StopMeleeTrace()
 void AHuman::SetNextAttackDamage(float Damage)
 {
 	CurrentAttackDamage = Damage;
-	UE_LOG(LogTemp, Log, TEXT("AHuman::SetNextAttackDamage - Set to %.1f"), Damage);
+	
 }
 
 void AHuman::SetMeleeTraceSourceActor(AActor* InSourceActor)
@@ -527,7 +527,7 @@ void AHuman::WarpAttack(float Radius, float Distance)
 {
 	if (!MotionWarping)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("WarpAttack: MotionWarping component is NULL!"));
+		
 		return;
 	}
 
@@ -579,7 +579,7 @@ void AHuman::OnMeleeAttackAbilityEnded()
 		if (bIsDead && bAttackInputBuffered)
 		{
 			bAttackInputBuffered = false;
-			UE_LOG(LogTemp, Warning, TEXT("OnMeleeAttackAbilityEnded: Dead - cleared attack buffer"));
+			
 		}
 		return;
 	}
@@ -589,12 +589,12 @@ void AHuman::OnMeleeAttackAbilityEnded()
 
 	bAttackInputBuffered = false;
 
-	UE_LOG(LogTemp, Warning, TEXT("OnMeleeAttackAbilityEnded: Scheduling next attack on next tick!"));
+	
 
 	// Запускаем следующую атаку на следующий тик, чтобы тег State.Combat.Attacking успел сняться
 	GetWorldTimerManager().SetTimerForNextTick([this]()
 	{
-		UE_LOG(LogTemp, Warning, TEXT("NextTick: Executing buffered attack!"));
+		
 		RequestMeleeAttack();
 	});
 }
@@ -619,7 +619,7 @@ void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
 				// Это позволяет показать реакцию на каждый удар
 				if (AnimInstance->Montage_IsPlaying(HitReactionMontage))
 				{
-					UE_LOG(LogTemp, Log, TEXT("🤕 OnHealthChanged: Interrupting current HitReaction"));
+					
 					AnimInstance->Montage_Stop(0.1f, HitReactionMontage); // Быстрый blend out за 0.1 сек
 				}
 				
@@ -630,12 +630,12 @@ void AHuman::OnHealthChanged(const FOnAttributeChangeData& Data)
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("❌ OnHealthChanged: AnimInstance is NULL!"));
+				
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("⚠️ OnHealthChanged: No HitReactionMontage set in Blueprint!"));
+			
 		}
 
 		// Проверяем смерть
@@ -658,7 +658,7 @@ void AHuman::HandleDeath()
 {
 	if (bIsDead)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: Already dead - ignoring"));
+		
 		return;
 	}
 
@@ -666,11 +666,11 @@ void AHuman::HandleDeath()
 
 	// ВАЖНО: Очищаем буфер атаки чтобы не было атак после смерти
 	bAttackInputBuffered = false;
-	UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Attack buffer CLEARED"));
+	
 
 	StopMeleeTrace();
 
-	UE_LOG(LogTemp, Error, TEXT("💀 HandleDeath: %s is DEAD!"), *GetName());
+	
 
 	// Добавляем тег смерти
 	if (AbilitySystem)
@@ -681,21 +681,21 @@ void AHuman::HandleDeath()
 
 		// Отменяем все активные способности
 		AbilitySystem->CancelAllAbilities();
-		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Cancelled all abilities"));
+		
 	}
 
 	// Отключаем контроллер (опционально)
 	if (Controller)
 	{
 		Controller->UnPossess();
-		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Unpossessed controller"));
+		
 	}
 
 	// ВАЖНО: Отключаем коллизию капсулы чтобы боты перестали атаковать
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled capsule collision"));
+		
 	}
 
 	// Отключаем движение
@@ -708,7 +708,7 @@ void AHuman::HandleDeath()
 		Movement->bOrientRotationToMovement = false;
 		Movement->bUseControllerDesiredRotation = false;
 		
-		UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Disabled movement and auto-rotation"));
+		
 	}
 
 	// Отключаем инпут
@@ -717,12 +717,12 @@ void AHuman::HandleDeath()
 	// Проигрываем анимацию смерти (если есть)
 	if (DeathMontage)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: DeathMontage found: %s"), *DeathMontage->GetName());
+		
 		
 		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
 		if (AnimInstance)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: AnimInstance is valid"));
+			
 			
 			// ВАЖНО: Блокируем поворот для Root Motion анимации
 			bIsPlayingDeathMontage = true;
@@ -738,35 +738,35 @@ void AHuman::HandleDeath()
 				BlendOutDelegate.BindUObject(this, &AHuman::OnDeathMontageBlendingOut);
 				AnimInstance->Montage_SetBlendingOutDelegate(BlendOutDelegate, DeathMontage);
 				
-				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Montage started (%.2f sec), BlendOut delegate SET"), PlayLength);
+				
 				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Playing death montage '%s' - rotation BLOCKED"), 
 					*DeathMontage->GetName());
-				UE_LOG(LogTemp, Warning, TEXT("🎬 HandleDeath: Ragdoll will activate on BlendOut - WAITING..."));
+				
 				return;
 			}
 			else
 			{
-				UE_LOG(LogTemp, Error, TEXT("❌ HandleDeath: Montage_Play failed (returned 0)! Enabling ragdoll immediately"));
+				
 				bIsPlayingDeathMontage = false;
 			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("❌ HandleDeath: AnimInstance is NULL!"));
+			
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: No DeathMontage set in Blueprint"));
+		
 	}
 
 	// Если нет анимации смерти - сразу включаем рэгдолл
-	UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: No DeathMontage - enabling ragdoll immediately"));
+	
 	EnableRagdoll();
 	
 	// ВАЖНО: Вызываем Blueprint событие для управления игрой (Game Over, Restart и т.д.)
 	OnDeath();
-	UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: OnDeath Blueprint event called"));
+	
 	
 	// ВАЖНО: Уведомляем GameMode о смерти
 	if (AArkhamGameMode* GameMode = GetWorld()->GetAuthGameMode<AArkhamGameMode>())
@@ -775,23 +775,14 @@ void AHuman::HandleDeath()
 		{
 			// Смерть игрока - перезапускаем уровень
 			GameMode->OnPlayerDeath(this);
-			UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Notified GameMode about player death"));
-		}
-		else
-		{
-			// Смерть бота - проверяем остались ли боты
-			if (AHumanBot* Bot = Cast<AHumanBot>(this))
-			{
-				GameMode->OnBotDeath(Bot);
-				UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Notified GameMode about bot death"));
-			}
+			
 		}
 	}
 }
 
 void AHuman::EnableRagdoll()
 {
-	UE_LOG(LogTemp, Warning, TEXT("AHuman::EnableRagdoll - Enabling ragdoll physics"));
+	
 
 	// Сбрасываем флаг проигрывания Death Montage
 	bIsPlayingDeathMontage = false;
@@ -824,7 +815,7 @@ void AHuman::OnDeathMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
 	
 	// ВАЖНО: Вызываем Blueprint событие для управления игрой
 	OnDeath();
-	UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: OnDeath Blueprint event called"));
+	
 	
 	// ВАЖНО: Уведомляем GameMode о смерти
 	if (AArkhamGameMode* GameMode = GetWorld()->GetAuthGameMode<AArkhamGameMode>())
@@ -833,16 +824,7 @@ void AHuman::OnDeathMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
 		{
 			// Смерть игрока - перезапускаем уровень
 			GameMode->OnPlayerDeath(this);
-			UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: Notified GameMode about player death"));
-		}
-		else
-		{
-			// Смерть бота - проверяем остались ли боты
-			if (AHumanBot* Bot = Cast<AHumanBot>(this))
-			{
-				GameMode->OnBotDeath(Bot);
-				UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: Notified GameMode about bot death"));
-			}
+			
 		}
 	}
 }

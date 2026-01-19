@@ -26,29 +26,25 @@ void ABotSpawner::BeginPlay()
 
 AHumanBot* ABotSpawner::SpawnBot(int32 CurrentLevel)
 {
-	// Проверяем что уровень подходит
 	if (CurrentLevel < SpawnAtLevel)
 	{
-		UE_LOG(LogTemp, Log, TEXT("BotSpawner: Level %d < SpawnAtLevel %d - not spawning"), 
-			CurrentLevel, SpawnAtLevel);
 		return nullptr;
 	}
 
-	// Проверяем что класс установлен
 	if (!BotClass)
 	{
-		UE_LOG(LogTemp, Error, TEXT("BotSpawner: BotClass is NULL!"));
 		return nullptr;
 	}
 
-	// Проверяем что еще не заспавнили
+	// Проверяем, существует ли уже заспавненный бот
 	if (SpawnedBot && SpawnedBot->IsValidLowLevel())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("BotSpawner: Bot already spawned!"));
 		return SpawnedBot;
 	}
 
-	// Спавним бота
+	// Обнуляем ссылку, если бот был уничтожен
+	SpawnedBot = nullptr;
+
 	FActorSpawnParameters SpawnParams;
 	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 	SpawnParams.Owner = this;
@@ -58,41 +54,21 @@ AHumanBot* ABotSpawner::SpawnBot(int32 CurrentLevel)
 
 	if (SpawnedBot)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("🤖 BotSpawner: Spawned bot %s at level %d (Location: %s)"), 
-			*SpawnedBot->GetName(), CurrentLevel, *SpawnTransform.GetLocation().ToString());
-		
-		// ВАЖНО: Проверяем что AI контроллер создался
-		// Иногда нужно небольшая задержка для инициализации
+		UE_LOG(LogTemp, Log, TEXT("BotSpawner: Spawned bot '%s' at level %d (required level: %d)"),
+			*SpawnedBot->GetName(), CurrentLevel, SpawnAtLevel);
+			
 		FTimerHandle CheckControllerTimer;
 		GetWorld()->GetTimerManager().SetTimerForNextTick([this, WeakBot = TWeakObjectPtr<AHumanBot>(SpawnedBot)]()
 		{
 			if (WeakBot.IsValid())
 			{
 				AHumanBot* Bot = WeakBot.Get();
-				if (Bot->GetController())
+				if (!Bot->GetController())
 				{
-					UE_LOG(LogTemp, Warning, TEXT("  ✓ Bot %s has controller: %s"), 
-						*Bot->GetName(), *Bot->GetController()->GetName());
-				}
-				else
-				{
-					UE_LOG(LogTemp, Error, TEXT("  ✗ Bot %s has NO controller! AI will not work!"), 
-						*Bot->GetName());
-					
-					// Пытаемся создать контроллер вручную
 					Bot->SpawnDefaultController();
-					
-					if (Bot->GetController())
-					{
-						UE_LOG(LogTemp, Warning, TEXT("  ✓ Controller spawned manually for %s"), *Bot->GetName());
-					}
 				}
 			}
 		});
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("BotSpawner: Failed to spawn bot!"));
 	}
 
 	return SpawnedBot;

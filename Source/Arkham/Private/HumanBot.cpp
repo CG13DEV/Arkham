@@ -96,13 +96,10 @@ void AHumanBot::ClearTarget()
 {
 	CurrentTarget = nullptr;
 	
-	// Очищаем Target Lock
 	if (TargetLockComponent)
 	{
 		TargetLockComponent->ClearTarget();
 	}
-	
-	UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s cleared target"), *GetName());
 }
 
 bool AHumanBot::IsTargetInAttackRange() const

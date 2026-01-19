@@ -51,14 +51,14 @@ void UMeleeTraceComponent::StartTrace(UAbilitySystemComponent* InSourceASC, UObj
 {
 	if (!GetWorld() || !GetOwner())
 	{
-		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: StartTrace failed - World or Owner is NULL"));
+		
 		return;
 	}
 
 	// Уже трейсим — перезапуск
 	if (bTracing)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("MeleeTrace: Restarting trace (was already tracing)"));
+		
 		StopTrace();
 	}
 
@@ -127,7 +127,7 @@ void UMeleeTraceComponent::TickTrace()
 			UAbilitySystemComponent* ASC = ASI->GetAbilitySystemComponent();
 			if (ASC && ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(TEXT("State.Dead"))))
 			{
-				UE_LOG(LogTemp, Log, TEXT("⚪ MeleeTrace: Owner is dead - stopping trace"));
+				
 				StopTrace();
 				return;
 			}
@@ -185,11 +185,11 @@ void UMeleeTraceComponent::TickTrace()
 
 			if (!bAllowMultipleHitsPerActor && HitActors.Contains(HitActor))
 			{
-				UE_LOG(LogTemp, Log, TEXT("⚪ MeleeTrace: %s already hit - skipping"), *HitActor->GetName());
+				
 				continue;
 			}
 
-			UE_LOG(LogTemp, Warning, TEXT("✅ MeleeTrace: NEW HIT on %s!"), *HitActor->GetName());
+			
 			HitActors.Add(HitActor);
 			ApplyDamageToTarget(HitActor, Hit);
 		}
@@ -200,14 +200,14 @@ void UMeleeTraceComponent::ApplyDamageToTarget(AActor* TargetActor, const FHitRe
 {
 	if (!TargetActor)
 	{
-		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: ApplyDamageToTarget - TargetActor is NULL!"));
+		
 		return;
 	}
 
 	UAbilitySystemComponent* LocalSourceASC = SourceASC.Get();
 	if (!LocalSourceASC)
 	{
-		UE_LOG(LogTemp, Error, TEXT("MeleeTrace: ApplyDamageToTarget - SourceASC is NULL!"));
+		
 		return;
 	}
 
@@ -229,7 +229,7 @@ void UMeleeTraceComponent::ApplyDamageToTarget(AActor* TargetActor, const FHitRe
 		if (SpecHandle.IsValid())
 		{
 			LocalSourceASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), TargetASC);
-			UE_LOG(LogTemp, Warning, TEXT("💥 MeleeTrace: Applied DamageEffectClass to %s"), *TargetActor->GetName());
+			
 		}
 		return;
 	}

@@ -32,26 +32,21 @@ void AHumanBotController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Подписываемся на события perception в контроллере
 	if (AIPerception)
 	{
 		AIPerception->OnTargetPerceptionUpdated.AddDynamic(this, &AHumanBotController::OnPerceptionUpdated);
-		UE_LOG(LogTemp, Warning, TEXT("HumanBotController: AI Perception initialized"));
 	}
 }
 
 void AHumanBotController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-
-	UE_LOG(LogTemp, Warning, TEXT("HumanBotController: Possessed %s"), 
-		InPawn ? *InPawn->GetName() : TEXT("NULL"));
 }
 
 void AHumanBotController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	
+
 	AHumanBot* Bot = Cast<AHumanBot>(GetPawn());
 	if (!Bot || Bot->IsDead())
 		return;
@@ -59,26 +54,20 @@ void AHumanBotController::Tick(float DeltaTime)
 	AActor* Target = Bot->GetCurrentTarget();
 	if (!Target)
 	{
-		// Нет цели - останавливаем бег
 		Bot->StopRunningToTarget();
 		return;
 	}
 
-	// Вычисляем дистанцию до цели
 	float DistanceToTarget = FVector::Dist(Bot->GetActorLocation(), Target->GetActorLocation());
 
-	// Управление бегом в зависимости от дистанции
 	if (DistanceToTarget > Bot->GetRunToTargetDistance())
 	{
-		// Далеко от цели - бежим
 		Bot->StartRunningToTarget();
 	}
 	else if (DistanceToTarget < Bot->GetStopRunDistance())
 	{
-		// Близко к цели - останавливаем бег (боевая дистанция)
 		Bot->StopRunningToTarget();
 	}
-	// Между StopRunDistance и RunToTargetDistance - сохраняем текущее состояние (гистерезис)
 }
 
 void AHumanBotController::OnPerceptionUpdated(AActor* Actor, FAIStimulus Stimulus)

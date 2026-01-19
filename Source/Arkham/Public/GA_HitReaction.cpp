@@ -37,7 +37,7 @@ void UGA_HitReaction::ActivateAbility(
 	ACharacter* Character = Cast<ACharacter>(ActorInfo->AvatarActor.Get());
 	if (!Character || !HitReactionMontage)
 	{
-		UE_LOG(LogTemp, Error, TEXT("GA_HitReaction: Character or HitReactionMontage is NULL!"));
+		
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -45,7 +45,7 @@ void UGA_HitReaction::ActivateAbility(
 	UAnimInstance* AnimInstance = Character->GetMesh()->GetAnimInstance();
 	if (!AnimInstance)
 	{
-		UE_LOG(LogTemp, Error, TEXT("GA_HitReaction: AnimInstance is NULL!"));
+		
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 		return;
 	}
@@ -53,7 +53,7 @@ void UGA_HitReaction::ActivateAbility(
 	// Если HitReaction уже играет - прерываем его
 	if (AnimInstance->Montage_IsPlaying(HitReactionMontage))
 	{
-		UE_LOG(LogTemp, Log, TEXT("GA_HitReaction: Interrupting current HitReaction"));
+		
 		AnimInstance->Montage_Stop(0.1f, HitReactionMontage);
 	}
 
@@ -67,11 +67,11 @@ void UGA_HitReaction::ActivateAbility(
 		EndDelegate.BindUObject(this, &UGA_HitReaction::OnMontageEnded);
 		AnimInstance->Montage_SetEndDelegate(EndDelegate, HitReactionMontage);
 		
-		UE_LOG(LogTemp, Warning, TEXT("🤕 GA_HitReaction: Playing HitReaction montage - RUN CANCELLED by tag!"));
+		
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("GA_HitReaction: Montage_Play failed!"));
+		
 		EndAbility(Handle, ActorInfo, ActivationInfo, true, true);
 	}
 }
@@ -83,7 +83,7 @@ void UGA_HitReaction::EndAbility(
 	bool bReplicateEndAbility,
 	bool bWasCancelled)
 {
-	UE_LOG(LogTemp, Warning, TEXT("🤕 GA_HitReaction: Ended - RUN UNBLOCKED"));
+	
 	Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility, bWasCancelled);
 }
 
