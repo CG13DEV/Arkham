@@ -59,6 +59,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Health")
 	bool IsDead() const { return bIsDead; }
 
+	/** Сбрасывает флаг смерти (вызывается GameMode при респавне) */
+	UFUNCTION(BlueprintCallable, Category="Health")
+	void Respawn();
+
+	/** Blueprint Event: Вызывается при смерти персонажа для управления игрой (Game Over, Restart и т.д.) */
+	UFUNCTION(BlueprintImplementableEvent, Category="Health")
+	void OnDeath();
+
 	/** Старый API: просто активирует GA по тегу */
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	void PerformMeleeAttack();

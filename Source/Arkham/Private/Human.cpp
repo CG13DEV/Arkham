@@ -13,6 +13,7 @@
 #include "MeleeTraceComponent.h"
 #include "TargetLockComponent.h"
 #include "MotionWarpingComponent.h"
+#include "../ArkhamGameMode.h"
 
 // Forward declaration для проверки типа
 class AHumanBot;
@@ -228,8 +229,22 @@ void AHuman::UpdateRotation(float DeltaTime)
 	const bool bIsMoving = Speed > 1.0f;
 	const bool bRunning = IsRunning();
 
+	// ВАЖНО: Проверяем играется ли какой-то монтаж (HitReaction, атака и т.д.)
+	bool bIsPlayingMontage = false;
+	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	{
+		bIsPlayingMontage = AnimInstance->IsAnyMontagePlaying();
+	}
+
 	if (bRunning || (bIsMoving && !IsTargetLocked()))
 	{
+		// ВАЖНО: Не поворачиваем по скорости если играется монтаж
+		if (bIsPlayingMontage)
+		{
+			UE_LOG(LogTemp, VeryVerbose, TEXT("UpdateRotation: Montage playing - rotation blocked"));
+			return;
+		}
+		
 		// Направление движения
 		const FRotator VelocityRotation = Velocity.ToOrientationRotator();
 		
@@ -356,6 +371,13 @@ float AHuman::GetHealth() const
 float AHuman::GetMaxHealth() const
 {
 	return Attributes ? Attributes->GetMaxHealth() : 0.f;
+}
+
+void AHuman::Respawn()
+{
+	bIsDead = false;
+	bIsPlayingDeathMontage = false;
+	UE_LOG(LogTemp, Warning, TEXT("🔄 Respawn: %s is now alive! bIsDead reset to FALSE"), *GetName());
 }
 
 void AHuman::PerformMeleeAttack()
@@ -741,6 +763,30 @@ void AHuman::HandleDeath()
 	// Если нет анимации смерти - сразу включаем рэгдолл
 	UE_LOG(LogTemp, Warning, TEXT("⚠️ HandleDeath: No DeathMontage - enabling ragdoll immediately"));
 	EnableRagdoll();
+	
+	// ВАЖНО: Вызываем Blueprint событие для управления игрой (Game Over, Restart и т.д.)
+	OnDeath();
+	UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: OnDeath Blueprint event called"));
+	
+	// ВАЖНО: Уведомляем GameMode о смерти
+	if (AArkhamGameMode* GameMode = GetWorld()->GetAuthGameMode<AArkhamGameMode>())
+	{
+		if (IsPlayerControlled())
+		{
+			// Смерть игрока - перезапускаем уровень
+			GameMode->OnPlayerDeath(this);
+			UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Notified GameMode about player death"));
+		}
+		else
+		{
+			// Смерть бота - проверяем остались ли боты
+			if (AHumanBot* Bot = Cast<AHumanBot>(this))
+			{
+				GameMode->OnBotDeath(Bot);
+				UE_LOG(LogTemp, Warning, TEXT("💀 HandleDeath: Notified GameMode about bot death"));
+			}
+		}
+	}
 }
 
 void AHuman::EnableRagdoll()
@@ -775,5 +821,29 @@ void AHuman::OnDeathMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
 	
 	// Включаем ragdoll когда начинается BlendOut анимации смерти
 	EnableRagdoll();
+	
+	// ВАЖНО: Вызываем Blueprint событие для управления игрой
+	OnDeath();
+	UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: OnDeath Blueprint event called"));
+	
+	// ВАЖНО: Уведомляем GameMode о смерти
+	if (AArkhamGameMode* GameMode = GetWorld()->GetAuthGameMode<AArkhamGameMode>())
+	{
+		if (IsPlayerControlled())
+		{
+			// Смерть игрока - перезапускаем уровень
+			GameMode->OnPlayerDeath(this);
+			UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: Notified GameMode about player death"));
+		}
+		else
+		{
+			// Смерть бота - проверяем остались ли боты
+			if (AHumanBot* Bot = Cast<AHumanBot>(this))
+			{
+				GameMode->OnBotDeath(Bot);
+				UE_LOG(LogTemp, Warning, TEXT("💀 OnDeathMontageBlendingOut: Notified GameMode about bot death"));
+			}
+		}
+	}
 }
 

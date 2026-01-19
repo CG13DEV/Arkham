@@ -108,7 +108,7 @@ void UGA_MeleeAttack::ActivateAbility(
 	// Подстраиваем позицию к цели перед атакой
 	if (AHuman* Human = Cast<AHuman>(ActorInfo->AvatarActor.Get()))
 	{
-		Human->WarpAttack(300.f, 100.f); // Радиус 200, дистанция 100
+		Human->WarpAttack(300.f, 10.f); // Радиус 200, дистанция 100
 	}
 
 	// Запускаем анимацию

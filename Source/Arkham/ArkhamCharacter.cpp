@@ -76,7 +76,7 @@ void AArkhamCharacter::BeginPlay()
 
 	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
 
-	GetController()->SetControlRotation(MainDirection.Rotation());
+	if (GetController()) GetController()->SetControlRotation(MainDirection.Rotation());
 }
 
 void AArkhamCharacter::Tick(float DeltaTime)
@@ -250,7 +250,7 @@ void AArkhamCharacter::Input_Look(const FInputActionValue& Value)
 
 void AArkhamCharacter::Input_LookReleased()
 {
-	if (!bIsLookMode)
+	if (!bIsLookMode || true)
 	{
 		return;
 	}

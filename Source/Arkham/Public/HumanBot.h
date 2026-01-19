@@ -21,6 +21,10 @@ public:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
+	/** Blueprint Event: Вызывается после полной инициализации бота для запуска State Tree */
+	UFUNCTION(BlueprintImplementableEvent, Category="AI")
+	void OnBotInitialized();
+
 	/** Получить текущую цель бота */
 	UFUNCTION(BlueprintCallable, Category="AI")
 	AActor* GetCurrentTarget() const { return CurrentTarget; }

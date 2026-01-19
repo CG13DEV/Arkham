@@ -20,11 +20,63 @@ AHumanBot::AHumanBot()
 void AHumanBot::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	if (GetController())
+	{
+		OnBotInitialized();
+	}
+	else
+	{
+		SpawnDefaultController();
+		
+		FTimerHandle RetryTimer;
+		GetWorld()->GetTimerManager().SetTimerForNextTick([this]()
+		{
+			if (GetController())
+			{
+				OnBotInitialized();
+			}
+		});
+	}
 }
 
 void AHumanBot::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	
+	// Простое AI управление как fallback если State Tree не работает
+	if (CurrentTarget && !bIsDead)
+	{
+		AAIController* AIC = Cast<AAIController>(GetController());
+		if (AIC)
+		{
+			float Distance = FVector::Dist(GetActorLocation(), CurrentTarget->GetActorLocation());
+			
+			if (Distance > AttackDistance + 50.f)
+			{
+				AIC->MoveToActor(CurrentTarget, AttackDistance);
+				
+				if (Distance > RunToTargetDistance)
+				{
+					StartRunningToTarget();
+				}
+				else if (Distance < StopRunDistance)
+				{
+					StopRunningToTarget();
+				}
+			}
+			else
+			{
+				AIC->StopMovement();
+				StopRunningToTarget();
+				
+				if (CanAttack())
+				{
+					ExecuteAttack();
+				}
+			}
+		}
+	}
 }
 
 void AHumanBot::SetTarget(AActor* NewTarget)
@@ -102,22 +154,11 @@ void AHumanBot::ExecuteAttack()
 {
 	if (!CurrentTarget || bIsDead || !CanAttack())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s cannot attack (Target=%s, Dead=%s, CanAttack=%s)"),
-			*GetName(),
-			CurrentTarget ? *CurrentTarget->GetName() : TEXT("NULL"),
-			bIsDead ? TEXT("YES") : TEXT("NO"),
-			CanAttack() ? TEXT("YES") : TEXT("NO"));
 		return;
 	}
 
-	// TargetLockComponent автоматически поворачивает персонажа к цели
-	// Не нужно вручную устанавливать rotation
-
-	// Выполняем атаку через GAS
 	PerformMeleeAttack();
 	LastAttackTime = GetWorld()->GetTimeSeconds();
-
-	UE_LOG(LogTemp, Warning, TEXT("HumanBot: %s attacking target: %s"), *GetName(), *CurrentTarget->GetName());
 }
 
 void AHumanBot::StartRunningToTarget()

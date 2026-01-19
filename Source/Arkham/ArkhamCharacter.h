@@ -36,7 +36,7 @@ protected:
 	float MinSpringArmLength = 250;
 
 	// Режим Look камеры
-	bool bIsLookMode;
+	bool bIsLookMode = true;
 	FVector LockedSpringArmPosition;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Camera")
