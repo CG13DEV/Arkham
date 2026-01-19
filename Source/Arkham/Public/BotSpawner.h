@@ -34,6 +34,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Spawner")
 	int32 GetSpawnLevel() const { return SpawnAtLevel; }
 
+	/** Получить заспавненного бота */
+	UFUNCTION(BlueprintCallable, Category="Spawner")
+	AHumanBot* GetSpawnedBot() const { return SpawnedBot; }
+
 protected:
 	virtual void BeginPlay() override;
 

@@ -18,8 +18,8 @@ AArkhamCharacter::AArkhamCharacter()
 	SpringArmMain->SetupAttachment(GetRootComponent());
 	SpringArmMain->SetRelativeLocation(FVector(0.f, 0.f, 60.f)); // Высота камеры
 	
-	SpringArmMain->TargetArmLength = 0.0f; // Дистанция камеры
-	TargetSpringArmLength = 500.f; // Целевая дистанция камеры (для плавного изменения)
+	TargetSpringArmLength = 300.f; // Целевая дистанция камеры (для плавного изменения)
+	SpringArmMain->TargetArmLength = TargetSpringArmLength; // Дистанция камеры
 	SpringArmMain->bUsePawnControlRotation = true; // ВАЖНО: следует за контроллером
 	
 	SpringArmMain->bEnableCameraLag = false; // Lag только на прокси
@@ -70,13 +70,26 @@ void AArkhamCharacter::BeginPlay()
 	Super::BeginPlay();
 	SetupInputMapping();
 
-	TargetSpringArmFloatingLocation = GetActorForwardVector() * -TargetSpringArmLength + GetActorLocation();
+	// Задержка для корректной инициализации камеры после загрузки уровня
+	FTimerHandle InitCameraTimer;
+	GetWorld()->GetTimerManager().SetTimer(InitCameraTimer, [this]()
+	{
+		if (!GetController())
+		{
+			return;
+		}
 
-	SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
+		TargetSpringArmFloatingLocation = GetActorForwardVector() * -TargetSpringArmLength + GetActorLocation();
+		
+		SpringArmMain->SetWorldLocation(TargetSpringArmFloatingLocation + FVector(0.f, 0.f, 160.f));
 
-	FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
+		FVector MainDirection = GetActorLocation() + FVector(0.f, 0.f, 80.f) - SpringArmMain->GetComponentLocation();
 
-	if (GetController()) GetController()->SetControlRotation(MainDirection.Rotation());
+		GetController()->SetControlRotation(MainDirection.Rotation());
+		
+		UE_LOG(LogTemp, Log, TEXT("🎥 Camera initialized for player at %s"), *GetActorLocation().ToString());
+		
+	}, 0.1f, false); // 0.1 секунды задержки
 }
 
 void AArkhamCharacter::Tick(float DeltaTime)

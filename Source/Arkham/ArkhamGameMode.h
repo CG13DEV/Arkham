@@ -21,6 +21,10 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Game|Level")
 	int32 CurrentLevel = 1;
 
+	/** Максимальный уровень в игре (определяется автоматически по спавнерам) */
+	UPROPERTY(BlueprintReadOnly, Category="Game|Level")
+	int32 MaxLevel = 3;
+
 	/** Был ли уже показан экран текущего уровня */
 	UPROPERTY(BlueprintReadOnly, Category="Game|Level")
 	bool bLevelScreenShown = false;
@@ -41,41 +45,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Game|Level")
 	void FinishGame();
 
-	/** Вызывается когда бот умирает - проверяет остались ли боты */
+	/** Сбрасывает цели у всех ботов (вызывается из триггера) */
 	UFUNCTION(BlueprintCallable, Category="Game|Level")
-	void OnBotDeath(AHumanBot* DeadBot);
-
-	/** Получить количество живых ботов */
-	UFUNCTION(BlueprintCallable, Category="Game|Level")
-	int32 GetAliveBotCount() const;
+	void ClearAllBotTargets();
 
 	/** Вызывается при смерти игрока для рестарта уровня */
 	UFUNCTION(BlueprintCallable, Category="Game")
 	void OnPlayerDeath(APawn* DeadPlayer);
 
-	/** Телепортирует всех ботов на начальные позиции и сбрасывает их состояние (вместо Destroy/Spawn) */
-	UFUNCTION(BlueprintCallable, Category="Game")
-	void ResetAllBots();
-
-	/** Удаляет всех ботов на уровне (старый метод, не используется) */
-	UFUNCTION(BlueprintCallable, Category="Game")
-	void DestroyAllBots();
-
-	/** Спавнит ботов заново на их начальные позиции (старый метод, не используется) */
-	UFUNCTION(BlueprintCallable, Category="Game")
-	void RespawnAllBots();
-
 	/** Перемещает игрока на PlayerStart */
 	UFUNCTION(BlueprintCallable, Category="Game")
 	void RespawnPlayer(APawn* Player);
-
-	/** Очищает цели у всех ботов на уровне */
-	UFUNCTION(BlueprintCallable, Category="Game")
-	void ClearAllBotTargets();
-
-	/** Полный рестарт: удаляет ботов, респавнит их и игрока */
-	UFUNCTION(BlueprintCallable, Category="Game")
-	void RestartLevel();
 
 protected:
 	virtual void BeginPlay() override;
@@ -86,17 +66,14 @@ protected:
 	/** Спавнит ботов через спавнеры для текущего уровня */
 	void SpawnBotsForCurrentLevel();
 
-	/** Сохраняем начальные позиции ботов при старте уровня (старый метод) */
-	void CacheBotStartPositions();
+	/** Телепортирует всех ботов на начальные позиции */
+	void ResetAllBotsToStart();
 
 private:
 	/** Список всех спавнеров на уровне */
 	UPROPERTY()
 	TArray<TObjectPtr<ABotSpawner>> BotSpawners;
 
-	/** Карта: бот класс -> начальная позиция и ротация */
-	UPROPERTY()
-	TMap<TSubclassOf<AHumanBot>, FTransform> BotStartTransforms;
 
 	/** Список всех ботов на уровне */
 	UPROPERTY()
